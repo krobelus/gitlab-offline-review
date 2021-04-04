@@ -185,7 +185,7 @@ README.md:2: 36fec6809fa431d765cc1654a3e8c2d8d04b7cbc
 
 Observe:
 - The start of the thread is marked by a line starting with `<file>:<line> <thread ID>`. 
-- The next line shows the commit ID and subject
+- The next line shows the abbreviated commit SHA and subject
 - There are a few lines of diff context.
 - Finally, the thread's comments are shown.
 
@@ -205,12 +205,12 @@ It currently takes a very specific set of positional parameters.  This is
 not a problem when using the [Tig integration](#Tig), but maybe this could
 be simplified.
 1. the source branch name.
-2. the commit ID of the diff to comment on.
+2. the commit SHA of the diff to comment on.
 3. the filename; the full relative path.
 4. the first character of the diff line
-   - `+` if the line is added
-   - `-` if the line deleted
-   - ` ` (a space) for context lines
+   - `"+"` if the line is added
+   - `"-"` if the line deleted
+   - `" "` (a space) for context lines
    You can also pass the entire line, only the first character is relevant.
 5. the line number in the old version of the file
 6. the line number in the new version of the file
@@ -228,8 +228,9 @@ will add an entry like this to a MR's `review.gl`:
 ```
 
 - The first line contains most of the parameters passed to `gl.py discuss`:
-  the commit SHA, the filename, new  line number, old line number.
-- This is followed by some context lines. The last line (here `+5` is the one)
+  the commit SHA, filename, new  line number, and old line number of the
+  pending comment.
+- This is followed by some context lines. The last line (here `+5`) is the one
   you are commenting on.
 
 After appending the above template to `review.gl`, `gl.py discuss` will invoke
@@ -260,10 +261,10 @@ edited already open, so I'd notice straight away.
 
 ### [Tig](https://jonas.github.io/tig/)
 
-When browse MR commits by going to the `refs` view (shortcut `r`) and
-selecting one of the MR branches (usually `origin/the-source-branch`).
-When scrolling through a commit diff, you can add review comments with
-a binding like this one (by typing `ac`):
+Browse MR commits by going to the `refs` view (shortcut `r`) and selecting
+one of the MR branches (usually `origin/the-source-branch`).  When scrolling
+through a commit diff, you can add review comments with a binding like this
+one (by typing `ac`):
 
 ```
 bind generic ac !gl.py discuss %(branch) %(commit) %(file) %(text) %(lineno_old) %(lineno)
@@ -281,12 +282,12 @@ hook global BufCreate .*[.]gl %{
 	# Highlight diff context lines.
 	add-highlighter buffer/gl-diff ref diff
 	# GitLab comments tend to be long lines, soft-wrap them.
-	add-highlighter buffer/my-wrap wrap -word -indent -marker <
+	add-highlighter buffer/gl-wrap wrap -word -indent -marker <
 }
 ```
 
-Since we are already editing the `*.gl` files in our editor, we should teach
-it how to run `gl.py fetch` and `gl.py submit` for the current file.
+Since we are already editing `*.gl` files in our editor, we should teach
+the editor to run `gl.py fetch` and `gl.py submit` for the current file.
 
 ```kak
 define-command -override gl-fetch -docstring %{
@@ -314,7 +315,7 @@ GitLab email notifications and browser tabs both give you URLs to issues
 or MRs. Let's teach the editor to visit those links:
 
 ```kak
-define-command -override gl-visit -docstring %{
+define-command -override gl-visit-url-from-clipboard -docstring %{
 	Read a GitLab URL from system clipboard and visit the corresponding file.
 	Fetch the latest comments of this issue or MR in the background.
 } %{
@@ -330,7 +331,7 @@ define-command -override gl-visit -docstring %{
 Finally, it can be convenient to quickly switch to the browser for some tasks:
 
 ```kak
-define-command gl-url -docstring %{
+define-command gl-browse-url -docstring %{
 	Open the current file's GitLab issue or MR page in the browser
 } %{ nop %sh{
 	xdg-open "$(gl.py path2url "$kak_buffile")"
