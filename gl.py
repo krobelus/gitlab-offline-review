@@ -282,7 +282,7 @@ def lazy_fetch_merge_request(*, branch=None, iid=None):
             assert False
         except Exception as e:
             if attempt == "miss":
-                print(f"no merge request {branch=} {iid=}", file=sys.stderr)
+                print(f"no merge request branch={branch} iid={iid}", file=sys.stderr)
                 raise e
             merge_requests = fetch_global("merge_requests")
 
@@ -1268,7 +1268,7 @@ def main():
     )
     subparser = parser.add_subparsers(
         metavar="<subcommand>",
-        required=True,
+        # required=True, # TODO needs > Python3.6
     )
 
     parser_fetch = subparser.add_parser(
