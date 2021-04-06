@@ -992,7 +992,7 @@ def Context(branch, discussion_id):
     )
 
 def cmd_url2path(url):
-    path, note_id = topath(url)
+    path = parse_path(url)[0]
     if path.startswith("i"): # Issue.
         path = f"gl/{path}/comments.gl"
     else: # MR.
