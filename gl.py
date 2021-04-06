@@ -1267,7 +1267,6 @@ def main():
         help="do not perform any network requests, only print what would happen",
     )
     subparser = parser.add_subparsers(
-        # title="commands",
         metavar="<subcommand>",
         required=True,
     )
