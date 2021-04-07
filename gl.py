@@ -1235,6 +1235,7 @@ def cmd_fetchstatic():
     Labels()
 
 def cmd_retry(branch):
+    branch = parse_path(branch)[0]
     merge_request = lazy_fetch_merge_request(branch=branch)
     blessed_sha = None
     while True:
