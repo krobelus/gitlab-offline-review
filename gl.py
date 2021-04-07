@@ -992,11 +992,11 @@ def Context(branch, discussion_id):
     )
 
 def cmd_url2path(url):
-    path = parse_path(url)[0]
-    if path.startswith("i"): # Issue.
-        path = f"gl/{path}/comments.gl"
+    branch_or_issue = parse_path(url)[0]
+    if isissue(branch_or_issue): # Issue.
+        path = f"gl/i/{branch_or_issue}/comments.gl"
     else: # MR.
-        path = f"gl/{path}/todo.gl"
+        path = f"gl/{branch_or_issue}/todo.gl"
     print(path)
 
 def topath(arg, merge_requests=None):
