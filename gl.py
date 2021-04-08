@@ -37,6 +37,7 @@ All files are created in "./{GLDIR}".
 DRY_RUN = "N" in os.environ
 DIFF_CONTEXT_LINES = 5
 MARKER = "𑁍"
+GITLAB_USER = os.environ.get("GITLAB_USER")
 
 THE_REPOSITORY = git.Repo(search_parent_directories=True)
 WORKING_TREE = THE_REPOSITORY.working_tree_dir
@@ -45,11 +46,7 @@ if "GIT_WORKTREE" in os.environ:
 DIR = Path(WORKING_TREE) / GLDIR
 DIR.mkdir(exist_ok=True)
 
-GITLAB_USER = os.environ.get("GITLAB_USER")
-
-def issue_template_callback(data, branch, issue_id):
-    pass
-
+# Try to guess the remote that, so we know which GitLab instance to talk to.
 remote = None
 for gitRemote in THE_REPOSITORY.remotes:
     REMOTE_NAME = gitRemote.name
@@ -181,9 +178,9 @@ def context(base, head, old_path, old_line, new_path, new_line):
     except git.exc.GitCommandError:
         return f" ? missing commits {base} or {head}\n"
     except UnicodeEncodeError:
-        return f" ? UnicodeEncodeError {base} {head}\n"
+        return f" ? UnicodeEncodeError parsing 'git diff {base} {head}'\n"
     except StopIteration:
-        return " ? no such file in patch set\n"
+        return " ? no file '{new_path}' in {base}..{head}\n"
     if new_line is not None:
         line = new_line
         rows = hunk.target
@@ -195,20 +192,39 @@ def context(base, head, old_path, old_line, new_path, new_line):
         the_context += "\n"
     return the_context
 
+def isissue(branch_or_issue):
+    return isinstance(branch_or_issue, int)
+
 def mrdir_branch(mrdir):
+    """
+    input:  /path/to/repo/gl/my-branch
+    output: my-branch
+    """
     return Path(mrdir).name
 
 def branch_mrdir(branch):
+    """
+    input:  my-branch
+    output: /path/to/repo/gl/my-branch
+    """
     return DIR / branch
 
 def issue_dir(issue_id):
+    """
+    input:  123
+    output: /path/to/repo/gl/i/123
+    """
     return DIR / "i" / str(issue_id)
 
 def req(method, path, **kwargs):
+    """
+    Send a request to the GitLab API and return the response.
+    """
     r = None
     if path.startswith(f"{PROTOCOL}://"):
-        url = path
+        url = path # Absolute URL - use it.
     else:
+        # Assume the path is relative to a "project" API.
         url = f"{PROTOCOL}://{GITLAB}/api/v4/projects/{GITLAB_PROJECT_ESC}/" + path
     curl_headers = "-HPRIVATE-TOKEN:\\ $GITLAB_TOKEN"
     if "data" in kwargs:
@@ -227,9 +243,11 @@ def req(method, path, **kwargs):
     return r
 
 def delete(path, **kwargs):
+    "Send an HTTP DELETE request to GitLab"
     return req("delete", path, **kwargs)
 
 def get(path, **kwargs):
+    "Send an HTTP GET request to GitLab"
     ppath = path
     if "?" in path:
         ppath = path + "&per_page=100"
@@ -247,19 +265,33 @@ def get(path, **kwargs):
     return data
 
 def post(path, **kwargs):
+    "Send an HTTP POST request to GitLab"
     return req("post", path, **kwargs)
 
 def put(path, **kwargs):
+    "Send an HTTP PUT request to GitLab"
     return req("put", path, **kwargs)
 
 def load_discussions(mrdir):
     try:
         with open(mrdir / "discussions.json") as f:
             return json.load(f)
-    except FileNotFoundError:  # We never fetched.
+    except FileNotFoundError:  # We never fetched (dry run?).
         return []
 
+def fetch_global(what):
+    doc = get(f"{what}?state=opened&scope=all")
+    if doc is not None:
+        (DIR / f"{what}.json").write_text(json.dumps(doc, indent=1))
+    else:
+        doc = load_global(what)
+    return doc
+
 def load_global(what):
+    """
+    Load data that is not specific to a singleissue/MR.
+    For example users, milestones, MR and issue list.
+    """
     with open(DIR / f"{what}.json") as f:
         return json.load(f)
 
@@ -267,6 +299,34 @@ def load_issues_and_merge_requests():
     with open(DIR / "issues.json") as i:
         with open(DIR / "merge_requests.json") as m:
             return json.load(i), json.load(m)
+
+def update_global(what, thing, fetch=True):
+    if fetch:
+        try:
+            newthing = req("get", f"{what}/{thing['iid']}").json()
+        except:
+            if DRY_RUN:
+                return thing
+            raise
+    path = DIR / f"{what}.json"
+    old = json.loads(path.read_bytes())
+    if fetch:
+        new = []
+        added = False
+        for t in old:
+            if fetch:
+                if t["iid"] == newthing["iid"]:
+                    new += [newthing]
+                    added = True
+                    continue
+            new += [t]
+        if not added:
+            new += [newthing]
+    else:
+        newthing = thing
+        new = old + [thing]
+    path.write_text(json.dumps(new, indent=1))
+    return newthing
 
 def lazy_fetch_merge_request(*, branch=None, iid=None):
     for attempt in ("hit", "miss"):
@@ -337,45 +397,6 @@ def cmd_fetch(branches_and_issues):
     branches_and_issues = [parse_path(p)[0] for p in branches_and_issues]
     fetch(branches_and_issues)
 
-def fetch_global(what):
-    doc = get(f"{what}?state=opened&scope=all")
-    if doc is not None:
-        (DIR / f"{what}.json").write_text(json.dumps(doc, indent=1))
-    else:
-        doc = load_global(what)
-    return doc
-
-def update_global(what, thing, fetch=True):
-    if fetch:
-        try:
-            newthing = req("get", f"{what}/{thing['iid']}").json()
-        except:
-            if DRY_RUN:
-                return thing
-            raise
-    path = DIR / f"{what}.json"
-    old = json.loads(path.read_bytes())
-    if fetch:
-        new = []
-        added = False
-        for t in old:
-            if fetch:
-                if t["iid"] == newthing["iid"]:
-                    new += [newthing]
-                    added = True
-                    continue
-            new += [t]
-        if not added:
-            new += [newthing]
-    else:
-        newthing = thing
-        new = old + [thing]
-    path.write_text(json.dumps(new, indent=1))
-    return newthing
-
-def isissue(branch_or_issue):
-    return isinstance(branch_or_issue, int)
-
 def fetch(branches_and_issues):
     issues, merge_requests = None, None
     try:
@@ -384,9 +405,12 @@ def fetch(branches_and_issues):
     except FileNotFoundError:
         pass
     fetched_all_issues = False
-    if branches_and_issues and (DIR / "issues.json").exists():
+    # If we already fetched the list of issues before, and are given an
+    # explicit list of issues, then only fetch those.
+    if (DIR / "issues.json").exists() and branches_and_issues:
         issues = [{"iid": i} for i in branches_and_issues if isissue(i)]
     else:
+        #  Fetch all open issues (this takes some time).
         issues = fetch_global("issues")
         fetched_all_issues = True
     want_branches = set(branch for branch in branches_and_issues if not isissue(branch))
@@ -419,6 +443,9 @@ def cmd_create():
         FetchForIssue(thing)
     print()
     print(thing["web_url"])
+
+def issue_template_callback(data, branch, issue_id):
+    pass
 
 def cmd_template(branch=None, issue_id=None):
     data = {
