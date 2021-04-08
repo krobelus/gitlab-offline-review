@@ -289,8 +289,8 @@ def fetch_global(what):
 
 def load_global(what):
     """
-    Load data that is not specific to a singleissue/MR.
-    For example users, milestones, MR and issue list.
+    Load data that is not specific to a single issue/MR.
+    For example users, milestones, issue list or MR list.
     """
     with open(DIR / f"{what}.json") as f:
         return json.load(f)
@@ -301,6 +301,9 @@ def load_issues_and_merge_requests():
             return json.load(i), json.load(m)
 
 def update_global(what, thing, fetch=True):
+    """
+    Edit the list of MRs/issues in-place, updating the given issue/MR.
+    """
     if fetch:
         try:
             newthing = req("get", f"{what}/{thing['iid']}").json()
@@ -420,13 +423,14 @@ def fetch(branches_and_issues):
         if merge_request["source_branch"] not in want_branches:
             continue
         merge_request = update_global("merge_requests", merge_request)
-        FetchForMR(merge_request)
+        fetch_mr_data(merge_request)
     for issue in issues:
         if not fetched_all_issues:
             issue = update_global("issues", issue)
-        FetchForIssue(issue)
+        fetch_issue_data(issue)
 
 def cmd_create():
+    "Create an issue/MR"
     rows = sys.stdin.read().splitlines()
     for r in rows:
         print(r)
@@ -438,9 +442,9 @@ def cmd_create():
     thing = post(what, data=data).json()
     update_global(what, thing, fetch=False)
     if "source_branch" in data:
-        FetchForMR(thing)
+        fetch_mr_data(thing)
     else:
-        FetchForIssue(thing)
+        fetch_issue_data(thing)
     print()
     print(thing["web_url"])
 
@@ -499,7 +503,7 @@ def metadata_header(thing):
         + "\n"
     )
 
-def FetchForIssue(issue):
+def fetch_issue_data(issue):
     issue_id = issue["iid"]
     idir = issue_dir(issue_id)
     idir.mkdir(exist_ok=True, parents=True)
@@ -523,7 +527,7 @@ def FetchForIssue(issue):
         comments_path.write_text(comments)
         pristine_path.write_text(comments)
 
-def FetchForMR(merge_request):
+def fetch_mr_data(merge_request):
     branch = merge_request["source_branch"]
     mrdir = branch_mrdir(branch)
     mrdir.mkdir(exist_ok=True)
@@ -581,11 +585,11 @@ def cmd_submit(branches_and_issues):
                 if not DRY_RUN:
                     shutil.rmtree(idir)
                 continue
-            changed, issue_changed = SubmitForIssue(issue)
+            changed, issue_changed = submit_issue_data(issue)
             if issue_changed:
                 issue = update_global("issues", issue)
             if changed:
-                FetchForIssue(issue)
+                fetch_issue_data(issue)
             continue
         mrdir = branch_mrdir(branch_or_issue)
         try:
@@ -598,11 +602,11 @@ def cmd_submit(branches_and_issues):
             if not DRY_RUN:
                 shutil.rmtree(mrdir)
             continue
-        changed, mr_changed = SubmitForMR(merge_request)
+        changed, mr_changed = submit_mr_data(merge_request)
         if mr_changed:
             merge_request = update_global("merge_requests", merge_request)
         if changed:
-            FetchForMR(merge_request)
+            fetch_mr_data(merge_request)
 
 def parse_metadata_header(rows, thing):
     data = {}
@@ -852,7 +856,7 @@ def SubmitDiscussion(discussions, rows, merge_request=None, issue=None):
                 changed = True
     return changed, desc_changed
 
-def SubmitForMR(merge_request):
+def submit_mr_data(merge_request):
     branch = merge_request["source_branch"]
     mrdir = branch_mrdir(branch)
     discussions = load_discussions(mrdir)
@@ -874,11 +878,11 @@ def SubmitForMR(merge_request):
             shutil.copy(pristine_path, todo_path)
         except FileNotFoundError:  # When there was no thread.
             pass
-    if SubmitReview(merge_request, mrdir):
+    if submit_review(merge_request, mrdir):
         changed = True
     return changed, desc_changed
 
-def SubmitForIssue(issue):
+def submit_issue_data(issue):
     issue_id = issue["iid"]
     idir = issue_dir(issue_id)
     discussions = load_discussions(idir)
@@ -898,6 +902,7 @@ def SubmitForIssue(issue):
     return changed, desc_changed
 
 def cmd_discuss(branch, commit, file, line_type, old_line, new_line):
+    "Draft a review comment."
     merge_request = lazy_fetch_merge_request(branch=branch)
 
     line_type = line_type[:1]
@@ -930,7 +935,7 @@ def cmd_discuss(branch, commit, file, line_type, old_line, new_line):
         os.environ["EDITOR"] + " +123123 " + shlex.quote(str(review)), shell=True
     )
 
-def SubmitReview(merge_request, mrdir):
+def submit_review(merge_request, mrdir):
     state = 0
     discussions = []
     review = mrdir / "review.gl"
@@ -1026,7 +1031,7 @@ def cmd_url2path(url):
         path = f"gl/{branch_or_issue}/todo.gl"
     print(path)
 
-def topath(arg, merge_requests=None):
+def url_to_path(arg, merge_requests=None):
     match = re.match(r".*?\b(merge_requests|issues)/(\d+).*?(?:#note_(\d+))?$", arg)
     assert match
     is_issue = match.group(1) == "issues"
@@ -1060,7 +1065,7 @@ def parse_path(path, merge_requests=None):
         path = str(path)
     note_id = None
     if path.startswith(f"{PROTOCOL}://"):
-        path, note_id = topath(path, merge_requests)
+        path, note_id = url_to_path(path, merge_requests)
     if "/" not in path:
         try:
             return int(path), note_id
