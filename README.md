@@ -1,21 +1,34 @@
 # gitlab-offline-review
 
 GitLab and GitHub have many advantages but their web-based code review UI
-lacks flexibility. I prefer to read and write review comments directly in
-my code editor, where I can view and edit related files efficiently.  This
-feels faster and allows to avoid context switches between website and editor.
+lack flexibility. It's hard to make them display data in the way you might
+want. Additionally, they can be real slow and refuse to handle large diffs.
+To overcome those limitations, I prefer to use native applications like an
+editor or a Git frontend. By default, those apps don't know how to talk
+to GitLab.
 
-[git-bug](https://github.com/MichaelMure/git-bug) can provide a
-good offline experience. However, it [doesn't support merge requests
-yet](https://github.com/MichaelMure/git-bug/issues/17).
+[git-bug](https://github.com/MichaelMure/git-bug) can be used to automate
+interaction with various Git forges. However, it [doesn't support merge
+requests yet](https://github.com/MichaelMure/git-bug/issues/17).
 
-I mostly need to write comments, comment on specific lines of commit diffs,
-and resolve threads.  That sounded fairly simple so I wrote my own tool
-`gl.py` to handle the interaction with GitLab.  It is a very specific tool,
-but it works for the most part ;)
+So I wrote my own tool `gl.py` to make it easy to integrate common GitLab
+tasks with my system. Features include:
+- View and post comments.
+- Comment on individual lines of MR diffs.
+- (Un)resolve discussions.
+- Submit all of the above in batch, so you can carefully compose your responses
+- Create issues/MRs, retry MR pipelines, etc..
+
+Various [integrations](#integrations) allow to
+- Browse a commit diff in the frontend of your choice, and compose a review
+  comment for the line at the cursor.
+- Integrate review comments in your editor:
+  - Have all review comments in a flat file.
+  - Add your responses by editing that file.
+  - Jump to the related file of each comment.
 
 `gl.py` should be fairly easy to integrate in your favorite editor, or your
-Git frontend of choice - speak up if you see something that can be improved.
+Git frontend of choice - speak up if you see anything that can be improved.
 
 ## Tutorial
 
