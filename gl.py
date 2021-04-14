@@ -121,7 +121,7 @@ def diff_for_newfile(base, head, path) -> unidiff.PatchedFile:
 @lru_cache(maxsize=None)
 def users():
     if not (DIR / "users.json").is_file():
-        Users()
+        gather_users()
     with open(DIR / "users.json") as f:
         return json.load(f)
 
@@ -130,7 +130,7 @@ def users():
 def lookup_user(*, name=None, username=None):
     for attempt in ("hit", "miss"):
         if attempt == "miss":
-            Users()
+            gather_users()
             with open(DIR / "users.json") as f:
                 us = json.load(f)
         else:
@@ -147,9 +147,9 @@ def lookup_user(*, name=None, username=None):
 
 
 @lru_cache(maxsize=None)
-def milestones():
+def load_milestones():
     if not (DIR / "milestones.json").is_file():
-        Milestones()
+        fetch_milestones()
     with open(DIR / "milestones.json") as f:
         return json.load(f)
 
@@ -159,11 +159,11 @@ def milestone_title_to_id(milestone_title):
     for attempt in ("hit", "miss"):
         if attempt == "miss":
             if not DRY_RUN:
-                Milestones()
+                fetch_milestones()
             with open(DIR / "milestones.json") as f:
                 ms = json.load(f)
         else:
-            ms = milestones()
+            ms = load_milestones()
         for milestone in ms:
             if milestone["title"] == milestone_title:
                 return milestone["id"]
@@ -173,7 +173,7 @@ def milestone_title_to_id(milestone_title):
 @lru_cache(maxsize=None)
 def labels():
     if not (DIR / "labels.json").is_file():
-        Labels()
+        fetch_labels()
     with open(DIR / "labels.json") as f:
         return json.load(f)
 
@@ -748,8 +748,7 @@ def parse_metadata_header(rows, thing):
     assert j == len(rows) or not rows[j].startswith(MARKER)
     return j, data
 
-
-def SubmitDiscussion(discussions, rows, merge_request=None, issue=None):
+def submit_discussion(discussions, rows, merge_request=None, issue=None):
     thing = merge_request if merge_request is not None else issue
     what = "merge_requests" if merge_request is not None else "issues"
     comments = {}  # discussion ID => note ID => text
@@ -918,7 +917,7 @@ def submit_mr_data(merge_request):
         rows = contents.splitlines()
     except FileNotFoundError:  # When there is no thread.
         rows = ()
-    changed, desc_changed = SubmitDiscussion(
+    changed, desc_changed = submit_discussion(
         discussions, rows, merge_request=merge_request
     )
     pristine_path = mrdir / "pristine-todo.gl"
@@ -942,7 +941,7 @@ def submit_issue_data(issue):
         rows = contents.splitlines()
     except FileNotFoundError:  # When there is no thread.
         rows = ()
-    changed, desc_changed = SubmitDiscussion(discussions, rows, issue=issue)
+    changed, desc_changed = submit_discussion(discussions, rows, issue=issue)
     pristine_path = idir / "pristine-comments.gl"
     comments_path = idir / "comments.gl"
     if not DRY_RUN:
@@ -1278,8 +1277,7 @@ def cmd_activity():
         s += "\n" + prettyfeed.read_text()
     prettyfeed.write_text(s)
 
-
-def Users():
+def gather_users():
     issues, merge_requests = load_issues_and_merge_requests()
     keys = ("assignee", "assignees", "author", "reviewers")
     user_ids = set()
@@ -1300,8 +1298,7 @@ def Users():
         (DIR / "users.json").write_text(json.dumps(users, indent=1))
     return True
 
-
-def Milestones():
+def fetch_milestones():
     milestones = get("milestones?state=active")
     if "GITLAB_GROUP" in os.environ:
         group = os.environ["GITLAB_GROUP"]
@@ -1311,8 +1308,7 @@ def Milestones():
         (DIR / "milestones.json").write_text(json.dumps(milestones, indent=1))
     return True
 
-
-def Labels():
+def fetch_labels():
     labels = get("labels")
     if "GITLAB_GROUP" in os.environ:
         group = os.environ["GITLAB_GROUP"]
@@ -1326,16 +1322,16 @@ def cmd_staticwords():
     print(
         "\n".join(
             [x["username"] for x in users()]
-            + [x["title"] for x in milestones()]
+            + [x["title"] for x in load_milestones()]
             + [x["name"] for x in labels()]
         )
     )
 
 
 def cmd_fetchstatic():
-    Users()
-    Milestones()
-    Labels()
+    gather_users()
+    fetch_milestones()
+    fetch_labels()
 
 
 def cmd_retry(branch):
