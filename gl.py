@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import git
-import hashlib
 import json
 import os
 import re
@@ -19,6 +17,9 @@ from functools import lru_cache
 from pathlib import Path
 from subprocess import PIPE
 
+import git
+from git import GitCommandError
+
 
 class OptionalDependency:
     pass
@@ -26,7 +27,7 @@ class OptionalDependency:
 
 try:
     import unidiff
-except:
+except ModuleNotFoundError:
     unidiff = OptionalDependency()
 
 GLDIR = "gl"
@@ -58,11 +59,11 @@ for gitRemote in THE_REPOSITORY.remotes:
         r"^(?P<Protocol>\w+://)?(?P<User>"
         + word_char
         + r"+@)?(?P<Host>[\w.-]+)"
-        + "(:(?P<Port>\d+))?[/:](?P<Project>"
+        + r"(:(?P<Port>\d+))?[/:](?P<Project>"
         + word_char
-        + "+/"
+        + r"+/"
         + word_char
-        + "+?)(\.git)?$",
+        + r"+?)(\.git)?$",
         url,
     )
     if remote:
@@ -190,7 +191,7 @@ def context(base, head, old_path, old_line, new_path, new_line):
     fetch_commit(head)
     try:
         hunk = diff_for_newfile(base, head, new_path)[0]
-    except git.exc.GitCommandError:
+    except GitCommandError:
         return f" ? missing commits {base} or {head}\n"
     except UnicodeEncodeError:
         return f" ? UnicodeEncodeError parsing 'git diff {base} {head}'\n"
@@ -335,12 +336,9 @@ def update_global(what, thing, fetch=True):
     Edit the list of MRs/issues in-place, updating the given issue/MR.
     """
     if fetch:
-        try:
-            newthing = req("get", f"{what}/{thing['iid']}").json()
-        except:
-            if DRY_RUN:
-                return thing
-            raise
+        if DRY_RUN:
+            return thing
+        newthing = req("get", f"{what}/{thing['iid']}").json()
     path = DIR / f"{what}.json"
     old = json.loads(path.read_bytes())
     if fetch:
@@ -387,9 +385,6 @@ def show_discussion(discussions):
     for discussion in discussions:
         notes = discussion["notes"]
         n0 = notes[0]
-        url = (
-            f'{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}/-/merge_requests/1#note_{n0["id"]}'
-        )
         if "position" not in n0:
             location = ""
         else:
@@ -411,7 +406,7 @@ def show_discussion(discussions):
                     "--format=%h %s", "-1", f"{n0['commit_id']}"
                 )
                 commit_human += "\n"
-            except:
+            except GitCommandError:
                 commit_human = ""
         out += f"{location}{discussion['id']}\n"
         out += commit_human
@@ -555,7 +550,6 @@ def fetch_issue_data(issue):
         (idir / "discussions.json").write_text(json.dumps(discussions, indent=1))
     else:
         discussions = load_discussions(idir)
-    url = f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}/-/issues/{issue_id}"
     comments = metadata_header(
         issue) + show_discussion(discussions) + f"{MARKER}\n"
     comments_path = idir / "comments.gl"
@@ -748,6 +742,7 @@ def parse_metadata_header(rows, thing):
     assert j == len(rows) or not rows[j].startswith(MARKER)
     return j, data
 
+
 def submit_discussion(discussions, rows, merge_request=None, issue=None):
     thing = merge_request if merge_request is not None else issue
     what = "merge_requests" if merge_request is not None else "issues"
@@ -794,7 +789,7 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
         if row.startswith(MARKER):
             state = "NEW_DISCUSSION"
             continue
-        note_header = re.match(f"^\t\[(\d+)\] ", row)
+        note_header = re.match(r"^\t\[(\d+)\] ", row)
         if note_header:
             note_id = int(note_header.group(1))
         location = re.match(r"^(?:[^:]+:\d+: )?([0-9a-f]{40})$", row)
@@ -997,8 +992,8 @@ def submit_review(merge_request, mrdir):
     except FileNotFoundError:  # No review.
         return
     for row in rows:
-        r = re.match(r"^" + MARKER +
-                     r" (\S+) ([^:]+):(\d+) ([ +-]) (\d+)", row)
+        r = re.match(r"^" + MARKER
+                     + r" (\S+) ([^:]+):(\d+) ([ +-]) (\d+)", row)
         if r:
             commit, file, new_line, line_type, old_line = (
                 r.group(1),
@@ -1027,14 +1022,6 @@ def submit_review(merge_request, mrdir):
         start_sha = base_sha
         head_sha = commit
         position_type = "text"
-        line_start_type = {
-            "+": "new",
-            "-": "old",
-            " ": "old",
-        }[line_type]
-        line_start_code = (
-            f"{hashlib.sha1(file.encode()).hexdigest()}_{old_line}_{new_line}"
-        )
         post(
             f'merge_requests/{merge_request["iid"]}/discussions',
             data={
@@ -1130,7 +1117,7 @@ def parse_path(path, merge_requests=None):
     if "/" not in path:
         try:
             return int(path), note_id
-        except:
+        except ValueError:
             return path, note_id
     # returns branch, or issue number
     p = Path(path)
@@ -1149,12 +1136,10 @@ def atom_updated(ns, element):
 def cmd_activity():
     feed = DIR / "project.atom"
     seen = None
-    try:
+    if feed.exists():
         root = ET.parse(feed).getroot()
         ns = root.tag[: -len("feed")]
         seen = atom_updated(ns, root)
-    except:
-        pass
     if not DRY_RUN:
         r = req("get", f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}.atom")
         feed.write_text(r.text)
@@ -1179,11 +1164,8 @@ def cmd_activity():
             title = f"gl/{branch}/todo.gl:1: {username} pushed"
             stale.add(branch)
         else:
-            try:
-                branch_or_issue, note_id = parse_path(link, merge_requests)
-                stale.add(branch_or_issue)
-            except:
-                pass
+            branch_or_issue, note_id = parse_path(link, merge_requests)
+            stale.add(branch_or_issue)
         entries += [(link, title, branch_or_issue, note_id)]
 
     if not DRY_RUN:
@@ -1277,6 +1259,7 @@ def cmd_activity():
         s += "\n" + prettyfeed.read_text()
     prettyfeed.write_text(s)
 
+
 def gather_users():
     issues, merge_requests = load_issues_and_merge_requests()
     keys = ("assignee", "assignees", "author", "reviewers")
@@ -1298,6 +1281,7 @@ def gather_users():
         (DIR / "users.json").write_text(json.dumps(users, indent=1))
     return True
 
+
 def fetch_milestones():
     milestones = get("milestones?state=active")
     if "GITLAB_GROUP" in os.environ:
@@ -1307,6 +1291,7 @@ def fetch_milestones():
     if not DRY_RUN:
         (DIR / "milestones.json").write_text(json.dumps(milestones, indent=1))
     return True
+
 
 def fetch_labels():
     labels = get("labels")
@@ -1401,8 +1386,8 @@ def main():
 
     parser_activity = subparser.add_parser(
         "activity",
-        help=f'fetch latest repository activity to "feed.gl"',
-        description=f'Letch latest repository activity to "feed.gl".',
+        help='fetch latest repository activity to "feed.gl"',
+        description='Letch latest repository activity to "feed.gl".',
     )
     parser_activity.set_defaults(func=cmd_activity)
 
@@ -1499,8 +1484,8 @@ def main():
 
     parser_path2url = subparser.add_parser(
         "path2url",
-        help=f'convert an issue number, branch, or path to "*.gl" file to a GitLab URL',
-        description=f'Convert an issue number, branch, or path to "*.gl" file to a GitLab URL',
+        help='convert an issue number, branch, or path to "*.gl" file to a GitLab URL',
+        description='Convert an issue number, branch, or path to "*.gl" file to a GitLab URL',
     )
     parser_path2url.add_argument(
         metavar="<branch/MR/issue>", dest="branches_and_issues", nargs="+"
@@ -1509,8 +1494,8 @@ def main():
 
     parser_url2path = subparser.add_parser(
         "url2path",
-        help=f'convert a GitLab issue URL or MR URL to the corresponding "*.gl" file',
-        description=f'Convert a GitLab issue URL or MR URL to the corresponding "*.gl" file.',
+        help='convert a GitLab issue URL or MR URL to the corresponding "*.gl" file',
+        description='Convert a GitLab issue URL or MR URL to the corresponding "*.gl" file.',
     )
     parser_url2path.add_argument(
         metavar="<GitLab issue URL or MR URL>", dest="url")
