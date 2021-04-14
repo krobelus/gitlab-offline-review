@@ -19,8 +19,10 @@ from functools import lru_cache
 from pathlib import Path
 from subprocess import PIPE
 
+
 class OptionalDependency:
     pass
+
 
 try:
     import unidiff
@@ -66,8 +68,10 @@ for gitRemote in THE_REPOSITORY.remotes:
     if remote:
         break
 
+
 class UserError(Exception):
     pass
+
 
 if not remote:
     raise UserError("Missing remote, don't know how to talk to GitLab")
@@ -78,6 +82,7 @@ PROTOCOL = "http" if GITLAB == "localhost" else "https"
 GITLAB_PROJECT_ESC = urllib.parse.quote(GITLAB_PROJECT, safe="")
 TOKEN = None
 
+
 def token():
     global TOKEN
     if TOKEN is not None:
@@ -85,16 +90,19 @@ def token():
     TOKEN = os.environ.get("GITLAB_TOKEN")
     if TOKEN is None:
         TOKEN = (
-            subprocess.run(("pass", f"{GITLAB}/token"), check=True, stdout=PIPE)
+            subprocess.run(("pass", f"{GITLAB}/token"),
+                           check=True, stdout=PIPE)
             .stdout.decode()
             .strip()
         )
     return TOKEN
 
+
 @lru_cache(maxsize=None)
 def diff(base, head) -> unidiff.PatchSet:
     uni_diff_text = THE_REPOSITORY.git.diff(base, head, "-U123123123").encode()
     return unidiff.PatchSet.from_string(uni_diff_text, encoding="utf-8")
+
 
 @lru_cache(maxsize=None)
 def diff_for_newfile(base, head, path) -> unidiff.PatchedFile:
@@ -109,12 +117,14 @@ def diff_for_newfile(base, head, path) -> unidiff.PatchedFile:
             return f
     raise StopIteration
 
+
 @lru_cache(maxsize=None)
 def users():
     if not (DIR / "users.json").is_file():
         Users()
     with open(DIR / "users.json") as f:
         return json.load(f)
+
 
 @lru_cache(maxsize=None)
 def lookup_user(*, name=None, username=None):
@@ -135,12 +145,14 @@ def lookup_user(*, name=None, username=None):
         "id": "unknown",
     }
 
+
 @lru_cache(maxsize=None)
 def milestones():
     if not (DIR / "milestones.json").is_file():
         Milestones()
     with open(DIR / "milestones.json") as f:
         return json.load(f)
+
 
 @lru_cache(maxsize=None)
 def milestone_title_to_id(milestone_title):
@@ -157,6 +169,7 @@ def milestone_title_to_id(milestone_title):
                 return milestone["id"]
     assert 0, f'no such milestone "{milestone_title}"'
 
+
 @lru_cache(maxsize=None)
 def labels():
     if not (DIR / "labels.json").is_file():
@@ -164,11 +177,13 @@ def labels():
     with open(DIR / "labels.json") as f:
         return json.load(f)
 
+
 def fetch_commit(ref):
     try:
         THE_REPOSITORY.commit(ref)
     except ValueError:
         THE_REPOSITORY.git().execute(("git", "fetch", REMOTE_NAME, ref))
+
 
 def context(base, head, old_path, old_line, new_path, new_line):
     fetch_commit(base)
@@ -187,13 +202,15 @@ def context(base, head, old_path, old_line, new_path, new_line):
     else:
         line = old_line
         rows = hunk.source
-    the_context = "".join(rows[max(0, line - DIFF_CONTEXT_LINES) : line])
+    the_context = "".join(rows[max(0, line - DIFF_CONTEXT_LINES): line])
     if not the_context.endswith("\n"):
         the_context += "\n"
     return the_context
 
+
 def isissue(branch_or_issue):
     return isinstance(branch_or_issue, int)
+
 
 def mrdir_branch(mrdir):
     """
@@ -202,12 +219,14 @@ def mrdir_branch(mrdir):
     """
     return Path(mrdir).name
 
+
 def branch_mrdir(branch):
     """
     input:  my-branch
     output: /path/to/repo/gl/my-branch
     """
     return DIR / branch
+
 
 def issue_dir(issue_id):
     """
@@ -216,13 +235,14 @@ def issue_dir(issue_id):
     """
     return DIR / "i" / str(issue_id)
 
+
 def req(method, path, **kwargs):
     """
     Send a request to the GitLab API and return the response.
     """
     r = None
     if path.startswith(f"{PROTOCOL}://"):
-        url = path # Absolute URL - use it.
+        url = path  # Absolute URL - use it.
     else:
         # Assume the path is relative to a "project" API.
         url = f"{PROTOCOL}://{GITLAB}/api/v4/projects/{GITLAB_PROJECT_ESC}/" + path
@@ -235,16 +255,19 @@ def req(method, path, **kwargs):
         trace += f' --data "{data}"'
     print(trace)
     if not DRY_RUN:
-        r = requests.request(method, url, headers={"PRIVATE-TOKEN": token()}, **kwargs)
+        r = requests.request(method, url, headers={
+                             "PRIVATE-TOKEN": token()}, **kwargs)
         if not r.ok:
             print(r, r.reason)
             print(r.content.decode())
         assert r.ok, f"HTTP {method} failed: {url}"
     return r
 
+
 def delete(path, **kwargs):
     "Send an HTTP DELETE request to GitLab"
     return req("delete", path, **kwargs)
+
 
 def get(path, **kwargs):
     "Send an HTTP GET request to GitLab"
@@ -264,13 +287,16 @@ def get(path, **kwargs):
         data += r.json()
     return data
 
+
 def post(path, **kwargs):
     "Send an HTTP POST request to GitLab"
     return req("post", path, **kwargs)
 
+
 def put(path, **kwargs):
     "Send an HTTP PUT request to GitLab"
     return req("put", path, **kwargs)
+
 
 def load_discussions(mrdir):
     try:
@@ -278,6 +304,7 @@ def load_discussions(mrdir):
             return json.load(f)
     except FileNotFoundError:  # We never fetched (dry run?).
         return []
+
 
 def fetch_global(what):
     doc = get(f"{what}?state=opened&scope=all")
@@ -287,6 +314,7 @@ def fetch_global(what):
         doc = load_global(what)
     return doc
 
+
 def load_global(what):
     """
     Load data that is not specific to a single issue/MR.
@@ -295,10 +323,12 @@ def load_global(what):
     with open(DIR / f"{what}.json") as f:
         return json.load(f)
 
+
 def load_issues_and_merge_requests():
     with open(DIR / "issues.json") as i:
         with open(DIR / "merge_requests.json") as m:
             return json.load(i), json.load(m)
+
 
 def update_global(what, thing, fetch=True):
     """
@@ -331,6 +361,7 @@ def update_global(what, thing, fetch=True):
     path.write_text(json.dumps(new, indent=1))
     return newthing
 
+
 def lazy_fetch_merge_request(*, branch=None, iid=None):
     for attempt in ("hit", "miss"):
         try:
@@ -345,9 +376,11 @@ def lazy_fetch_merge_request(*, branch=None, iid=None):
             assert False
         except Exception as e:
             if attempt == "miss":
-                print(f"no merge request branch={branch} iid={iid}", file=sys.stderr)
+                print(
+                    f"no merge request branch={branch} iid={iid}", file=sys.stderr)
                 raise e
             merge_requests = fetch_global("merge_requests")
+
 
 def show_discussion(discussions):
     out = ""
@@ -391,14 +424,17 @@ def show_discussion(discussions):
                 author = note["id"]
             text = f'[{author}] {note["body"]}'
             lines = text.splitlines()
-            text = "\t" + lines[0] + "".join("\n\t\t" + line for line in lines[1:])
+            text = "\t" + lines[0] + \
+                "".join("\n\t\t" + line for line in lines[1:])
             out += text + "\n"
         out += "\n"
     return out
 
+
 def cmd_fetch(branches_and_issues):
     branches_and_issues = [parse_path(p)[0] for p in branches_and_issues]
     fetch(branches_and_issues)
+
 
 def fetch(branches_and_issues):
     issues, merge_requests = None, None
@@ -416,7 +452,8 @@ def fetch(branches_and_issues):
         #  Fetch all open issues (this takes some time).
         issues = fetch_global("issues")
         fetched_all_issues = True
-    want_branches = set(branch for branch in branches_and_issues if not isissue(branch))
+    want_branches = set(
+        branch for branch in branches_and_issues if not isissue(branch))
     if merge_requests is None or not want_branches.issubset(have_branches):
         merge_requests = fetch_global("merge_requests")
     for merge_request in merge_requests:
@@ -428,6 +465,7 @@ def fetch(branches_and_issues):
         if not fetched_all_issues:
             issue = update_global("issues", issue)
         fetch_issue_data(issue)
+
 
 def cmd_create():
     "Create an issue/MR"
@@ -448,8 +486,10 @@ def cmd_create():
     print()
     print(thing["web_url"])
 
+
 def issue_template_callback(data, branch, issue_id):
     pass
+
 
 def cmd_template(branch=None, issue_id=None):
     data = {
@@ -477,6 +517,7 @@ def cmd_template(branch=None, issue_id=None):
         issue_template_callback(data, branch, issue_id)
     print(metadata_header(data).rstrip("\n"))
 
+
 def metadata_header(thing):
     extra = ""
     if "source_branch" in thing:
@@ -489,7 +530,8 @@ def metadata_header(thing):
         )
     return (
         f'{thing["title"]}\n\n'
-        + ("\n" if thing["description"] is None else f'{thing["description"]}\n')
+        + ("\n" if thing["description"]
+           is None else f'{thing["description"]}\n')
         + extra
         + f"{MARKER} assignees: "
         + ",".join(a["username"] for a in thing["assignees"])
@@ -503,6 +545,7 @@ def metadata_header(thing):
         + "\n"
     )
 
+
 def fetch_issue_data(issue):
     issue_id = issue["iid"]
     idir = issue_dir(issue_id)
@@ -513,7 +556,8 @@ def fetch_issue_data(issue):
     else:
         discussions = load_discussions(idir)
     url = f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}/-/issues/{issue_id}"
-    comments = metadata_header(issue) + show_discussion(discussions) + f"{MARKER}\n"
+    comments = metadata_header(
+        issue) + show_discussion(discussions) + f"{MARKER}\n"
     comments_path = idir / "comments.gl"
     pristine_path = idir / "pristine-comments.gl"
     if comments_path.exists():
@@ -526,6 +570,7 @@ def fetch_issue_data(issue):
     else:
         comments_path.write_text(comments)
         pristine_path.write_text(comments)
+
 
 def fetch_mr_data(merge_request):
     branch = merge_request["source_branch"]
@@ -566,6 +611,7 @@ def fetch_mr_data(merge_request):
     (mrdir / "meta.gl").write_text(
         metadata_header(merge_request) + show_discussion(unresolvable)
     )
+
 
 def cmd_submit(branches_and_issues):
     branches_and_issues = [parse_path(p)[0] for p in branches_and_issues]
@@ -608,6 +654,7 @@ def cmd_submit(branches_and_issues):
         if changed:
             fetch_mr_data(merge_request)
 
+
 def parse_metadata_header(rows, thing):
     data = {}
     description = []
@@ -637,13 +684,13 @@ def parse_metadata_header(rows, thing):
             prefix = f"{MARKER} {optional_field}:"
             if row.startswith(prefix):
                 if thing is None or optional_field in "state_event":
-                    data[f"{optional_field}"] = row[len(prefix) :].lstrip()
+                    data[f"{optional_field}"] = row[len(prefix):].lstrip()
                 consumed = True
         if consumed:
             continue
         prefix = f"{MARKER} assignees:"
         if row.startswith(prefix):
-            assignees = row[len(prefix) :].lstrip()
+            assignees = row[len(prefix):].lstrip()
             if thing is None or assignees != ",".join(
                 a["username"] for a in thing["assignees"]
             ):
@@ -657,7 +704,7 @@ def parse_metadata_header(rows, thing):
         # TODO unclone
         prefix = f"{MARKER} reviewers:"
         if row.startswith(prefix):
-            reviewers = row[len(prefix) :].lstrip()
+            reviewers = row[len(prefix):].lstrip()
             if thing is None or reviewers != ",".join(
                 a["username"] for a in thing["reviewers"]
             ):
@@ -670,7 +717,7 @@ def parse_metadata_header(rows, thing):
             continue
         prefix = f"{MARKER} milestone:"
         if row.startswith(prefix):
-            milestone = row[len(prefix) :].lstrip()
+            milestone = row[len(prefix):].lstrip()
             if (
                 thing is None
                 or (bool(milestone) != bool(thing["milestone"]))
@@ -689,7 +736,7 @@ def parse_metadata_header(rows, thing):
             continue
         prefix = f"{MARKER}    labels:"
         if row.startswith(prefix):
-            labels = row[len(prefix) :].lstrip()
+            labels = row[len(prefix):].lstrip()
             if thing is None or labels != ",".join(thing["labels"]):
                 data["labels"] = labels
             continue
@@ -700,6 +747,7 @@ def parse_metadata_header(rows, thing):
     assert j == 0 or rows[j - 1].startswith(MARKER)
     assert j == len(rows) or not rows[j].startswith(MARKER)
     return j, data
+
 
 def SubmitDiscussion(discussions, rows, merge_request=None, issue=None):
     thing = merge_request if merge_request is not None else issue
@@ -786,7 +834,8 @@ def SubmitDiscussion(discussions, rows, merge_request=None, issue=None):
                 changed = True
                 continue
         if re.match(r"^!!!delete$", row):
-            delete(f'{what}/{what_id}/discussions/{discussion["id"]}/notes/{note_id}')
+            delete(
+                f'{what}/{what_id}/discussions/{discussion["id"]}/notes/{note_id}')
             changed = True
             continue
         if state == "CONTEXT":
@@ -856,6 +905,7 @@ def SubmitDiscussion(discussions, rows, merge_request=None, issue=None):
                 changed = True
     return changed, desc_changed
 
+
 def submit_mr_data(merge_request):
     branch = merge_request["source_branch"]
     mrdir = branch_mrdir(branch)
@@ -882,6 +932,7 @@ def submit_mr_data(merge_request):
         changed = True
     return changed, desc_changed
 
+
 def submit_issue_data(issue):
     issue_id = issue["iid"]
     idir = issue_dir(issue_id)
@@ -901,6 +952,7 @@ def submit_issue_data(issue):
             pass
     return changed, desc_changed
 
+
 def cmd_discuss(branch, commit, file, line_type, old_line, new_line):
     "Draft a review comment."
     merge_request = lazy_fetch_merge_request(branch=branch)
@@ -919,7 +971,8 @@ def cmd_discuss(branch, commit, file, line_type, old_line, new_line):
             if row.target_line_no >= new_line:
                 rows = hunk[: i + 1]
                 break
-        context = "".join(r.line_type + r.value for r in rows[-DIFF_CONTEXT_LINES:])
+        context = "".join(
+            r.line_type + r.value for r in rows[-DIFF_CONTEXT_LINES:])
     except UnicodeEncodeError:
         context = f" ? UnicodeEncodeError {commit}\n"
 
@@ -935,6 +988,7 @@ def cmd_discuss(branch, commit, file, line_type, old_line, new_line):
         os.environ["EDITOR"] + " +123123 " + shlex.quote(str(review)), shell=True
     )
 
+
 def submit_review(merge_request, mrdir):
     state = 0
     discussions = []
@@ -944,7 +998,8 @@ def submit_review(merge_request, mrdir):
     except FileNotFoundError:  # No review.
         return
     for row in rows:
-        r = re.match(r"^" + MARKER + r" (\S+) ([^:]+):(\d+) ([ +-]) (\d+)", row)
+        r = re.match(r"^" + MARKER +
+                     r" (\S+) ([^:]+):(\d+) ([ +-]) (\d+)", row)
         if r:
             commit, file, new_line, line_type, old_line = (
                 r.group(1),
@@ -1000,6 +1055,7 @@ def submit_review(merge_request, mrdir):
         review.unlink()
     return True  # changed
 
+
 def Context(branch, discussion_id):
     mrdir = branch_mrdir(branch)
     discussions = load_discussions(mrdir)
@@ -1023,16 +1079,19 @@ def Context(branch, discussion_id):
         check=True,
     )
 
+
 def cmd_url2path(url):
     branch_or_issue = parse_path(url)[0]
-    if isissue(branch_or_issue): # Issue.
+    if isissue(branch_or_issue):  # Issue.
         path = f"gl/i/{branch_or_issue}/comments.gl"
-    else: # MR.
+    else:  # MR.
         path = f"gl/{branch_or_issue}/todo.gl"
     print(path)
 
+
 def url_to_path(arg, merge_requests=None):
-    match = re.match(r".*?\b(merge_requests|issues)/(\d+).*?(?:#note_(\d+))?$", arg)
+    match = re.match(
+        r".*?\b(merge_requests|issues)/(\d+).*?(?:#note_(\d+))?$", arg)
     assert match
     is_issue = match.group(1) == "issues"
     note_id = match.group(3)
@@ -1047,11 +1106,13 @@ def url_to_path(arg, merge_requests=None):
         merge_request = lazy_fetch_merge_request(iid=mr_id)
     return merge_request["source_branch"], note_id
 
+
 def cmd_path2url(branches_and_issues):
     branches_and_issues = [parse_path(p)[0] for p in branches_and_issues]
     for branch_or_issue in branches_and_issues:
         if isissue(branch_or_issue):
-            print(f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}/-/issues/{branch_or_issue}")
+            print(
+                f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}/-/issues/{branch_or_issue}")
         merge_requests = load_global("merge_requests")
         merge_request = next(
             mr for mr in merge_requests if mr["source_branch"] == branch_or_issue
@@ -1059,6 +1120,7 @@ def cmd_path2url(branches_and_issues):
         print(
             f'{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}/-/merge_requests/{merge_request["iid"]}'
         )
+
 
 def parse_path(path, merge_requests=None):
     if isinstance(path, Path):
@@ -1079,9 +1141,11 @@ def parse_path(path, merge_requests=None):
         return int(p.name), note_id
     return p.name, note_id
 
+
 def atom_updated(ns, element):
     updated_elem = element.find(ns + "updated")
     return datetime.strptime(updated_elem.text, "%Y-%m-%dT%H:%M:%SZ")
+
 
 def cmd_activity():
     feed = DIR / "project.atom"
@@ -1142,7 +1206,8 @@ def cmd_activity():
     entries_with_file = []
     for link, title, branch_or_issue, note_id in entries:
         if branch_or_issue is None:
-            entries_with_file += [(link, title, branch_or_issue, note_id, None, None)]
+            entries_with_file += [(link, title,
+                                   branch_or_issue, note_id, None, None)]
             continue
         if isissue(branch_or_issue):
             path = issue_dir(branch_or_issue)
@@ -1179,7 +1244,8 @@ def cmd_activity():
         file_to_contents[filepath] = filepath.read_text().splitlines()
     s = ""
     us = users()
-    user_re = re.compile(r"\b(" + "|".join(re.escape(u["name"]) for u in us) + r")\b")
+    user_re = re.compile(
+        r"\b(" + "|".join(re.escape(u["name"]) for u in us) + r")\b")
     for (
         link,
         title,
@@ -1212,6 +1278,7 @@ def cmd_activity():
         s += "\n" + prettyfeed.read_text()
     prettyfeed.write_text(s)
 
+
 def Users():
     issues, merge_requests = load_issues_and_merge_requests()
     keys = ("assignee", "assignees", "author", "reviewers")
@@ -1233,6 +1300,7 @@ def Users():
         (DIR / "users.json").write_text(json.dumps(users, indent=1))
     return True
 
+
 def Milestones():
     milestones = get("milestones?state=active")
     if "GITLAB_GROUP" in os.environ:
@@ -1243,6 +1311,7 @@ def Milestones():
         (DIR / "milestones.json").write_text(json.dumps(milestones, indent=1))
     return True
 
+
 def Labels():
     labels = get("labels")
     if "GITLAB_GROUP" in os.environ:
@@ -1251,6 +1320,7 @@ def Labels():
         labels += get(url)
     (DIR / "labels.json").write_text(json.dumps(labels, indent=1))
     return True
+
 
 def cmd_staticwords():
     print(
@@ -1261,10 +1331,12 @@ def cmd_staticwords():
         )
     )
 
+
 def cmd_fetchstatic():
     Users()
     Milestones()
     Labels()
+
 
 def cmd_retry(branch):
     branch = parse_path(branch)[0]
@@ -1291,6 +1363,7 @@ def cmd_retry(branch):
             post(f'pipelines/{pipeline["id"]}/retry')
         time.sleep(180)
 
+
 def main():
     parser = argparse.ArgumentParser(description=USAGE)
     parser.add_argument(
@@ -1309,7 +1382,12 @@ def main():
         help="download discussions from an issue or MR",
         description="Download discussions from an issue or MR.",
     )
-    parser_fetch.add_argument("branches_and_issues", metavar="<branch/MR/issue>", nargs="*", help='branch, issue number, URL, or path to a "*.gl" file')
+    parser_fetch.add_argument(
+        "branches_and_issues",
+        metavar="<branch/MR/issue>",
+        nargs="*",
+        help='branch, issue number, URL, or path to a "*.gl" file',
+    )
     parser_fetch.set_defaults(func=cmd_fetch)
 
     parser_submit = subparser.add_parser(
@@ -1317,7 +1395,12 @@ def main():
         help='submit changes drafted in "*.gl" files',
         description="Submit comments based on local files.",
     )
-    parser_submit.add_argument("branches_and_issues", metavar="<branch/MR/issue>", nargs="+", help='branch, issue number, URL, or path to a "*.gl" file')
+    parser_submit.add_argument(
+        "branches_and_issues",
+        metavar="<branch/MR/issue>",
+        nargs="+",
+        help='branch, issue number, URL, or path to a "*.gl" file',
+    )
     parser_submit.set_defaults(func=cmd_submit)
 
     parser_activity = subparser.add_parser(
@@ -1381,8 +1464,15 @@ def main():
         environment variable GITLAB_TARGET_BRANCH.
         """,
     )
-    parser_template.add_argument("branch", metavar="<branch>", nargs="?", help="source branch of the MR")
-    parser_template.add_argument("issue_id", metavar="<issue>", nargs="?", help="optional issue to be closed by this MR")
+    parser_template.add_argument(
+        "branch", metavar="<branch>", nargs="?", help="source branch of the MR"
+    )
+    parser_template.add_argument(
+        "issue_id",
+        metavar="<issue>",
+        nargs="?",
+        help="optional issue to be closed by this MR",
+    )
     parser_template.set_defaults(func=cmd_template)
 
     parser_create = subparser.add_parser(
@@ -1400,7 +1490,8 @@ def main():
         help="retry the pipeline of the given MR until it passes, or someone pushes another version",
         description="retry the pipeline of the given MR until it passes, or someone pushes another version",
     )
-    parser_retry.add_argument("branch", metavar="<MR URL or branch>", help="The MR ID")
+    parser_retry.add_argument(
+        "branch", metavar="<MR URL or branch>", help="The MR ID")
     parser_retry.set_defaults(func=cmd_retry)
 
     parser_staticwords = subparser.add_parser(
@@ -1415,7 +1506,9 @@ def main():
         help=f'convert an issue number, branch, or path to "*.gl" file to a GitLab URL',
         description=f'Convert an issue number, branch, or path to "*.gl" file to a GitLab URL',
     )
-    parser_path2url.add_argument(metavar="<branch/MR/issue>", dest="branches_and_issues", nargs="+")
+    parser_path2url.add_argument(
+        metavar="<branch/MR/issue>", dest="branches_and_issues", nargs="+"
+    )
     parser_path2url.set_defaults(func=cmd_path2url)
 
     parser_url2path = subparser.add_parser(
@@ -1423,7 +1516,8 @@ def main():
         help=f'convert a GitLab issue URL or MR URL to the corresponding "*.gl" file',
         description=f'Convert a GitLab issue URL or MR URL to the corresponding "*.gl" file.',
     )
-    parser_url2path.add_argument(metavar="<GitLab issue URL or MR URL>", dest="url")
+    parser_url2path.add_argument(
+        metavar="<GitLab issue URL or MR URL>", dest="url")
     parser_url2path.set_defaults(func=cmd_url2path)
 
     args = parser.parse_args()
@@ -1435,6 +1529,7 @@ def main():
     del kwargs["dry_run"]
     del kwargs["func"]
     args.func(**kwargs)
+
 
 if __name__ == "__main__":
     main()
