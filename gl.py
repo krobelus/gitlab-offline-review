@@ -237,7 +237,7 @@ def issue_dir(issue_id):
     return DIR / "i" / str(issue_id)
 
 
-def req(method, path, **kwargs):
+def gitlab_request(method, path, **kwargs):
     """
     Send a request to the GitLab API and return the response.
     """
@@ -267,7 +267,7 @@ def req(method, path, **kwargs):
 
 def delete(path, **kwargs):
     "Send an HTTP DELETE request to GitLab"
-    return req("delete", path, **kwargs)
+    return gitlab_request("delete", path, **kwargs)
 
 
 def get(path, **kwargs):
@@ -277,13 +277,13 @@ def get(path, **kwargs):
         ppath = path + "&per_page=100"
     else:
         ppath = path + "?per_page=100"
-    r = req("get", ppath, **kwargs)
+    r = gitlab_request("get", ppath, **kwargs)
     if r is None:
         return
     data = r.json()
     next_page = r.headers.get("X-Next-Page")
     while next_page:
-        r = req("get", ppath + f"&page={next_page}")
+        r = gitlab_request("get", ppath + f"&page={next_page}")
         next_page = r.headers.get("X-Next-Page")
         data += r.json()
     return data
@@ -291,12 +291,12 @@ def get(path, **kwargs):
 
 def post(path, **kwargs):
     "Send an HTTP POST request to GitLab"
-    return req("post", path, **kwargs)
+    return gitlab_request("post", path, **kwargs)
 
 
 def put(path, **kwargs):
     "Send an HTTP PUT request to GitLab"
-    return req("put", path, **kwargs)
+    return gitlab_request("put", path, **kwargs)
 
 
 def load_discussions(mrdir):
@@ -338,7 +338,7 @@ def update_global(what, thing, fetch=True):
     if fetch:
         if DRY_RUN:
             return thing
-        newthing = req("get", f"{what}/{thing['iid']}").json()
+        newthing = gitlab_request("get", f"{what}/{thing['iid']}").json()
     path = DIR / f"{what}.json"
     old = json.loads(path.read_bytes())
     if fetch:
@@ -757,7 +757,7 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
     if data:
         if not DRY_RUN:  # TODO
             try:  # These are a bit unreliable.
-                current = req("get", f"{what}/{thing['iid']}").json()
+                current = gitlab_request("get", f"{what}/{thing['iid']}").json()
                 for key in data:
                     if (
                         key.endswith("_id")
@@ -1117,7 +1117,7 @@ def cmd_activity():
         ns = root.tag[: -len("feed")]
         seen = atom_updated(ns, root)
     if not DRY_RUN:
-        r = req("get", f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}.atom")
+        r = gitlab_request("get", f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}.atom")
         feed.write_text(r.text)
         root = ET.fromstring(r.text)
         ns = root.tag[: -len("feed")]
