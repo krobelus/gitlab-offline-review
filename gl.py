@@ -1329,9 +1329,12 @@ def main():
         action="store_true",
         help="do not perform any network requests, only print what would happen",
     )
+    kwargs = {}
+    if (sys.version_info.major, sys.version_info.minor) >= 3.7:
+        kwargs["required"] = True
     subparser = parser.add_subparsers(
         metavar="<subcommand>",
-        # required=True, # TODO needs > Python3.6
+        **kwargs,
     )
 
     parser_fetch = subparser.add_parser(
