@@ -50,34 +50,37 @@ DIR = Path(WORKING_TREE) / GLDIR
 DIR.mkdir(exist_ok=True)
 
 # Try to guess the remote that, so we know which GitLab instance to talk to.
-remote = None
-for gitRemote in THE_REPOSITORY.remotes:
-    REMOTE_NAME = gitRemote.name
-    url = next(gitRemote.urls)
-    word_char = r"[\w.-]"
-    remote = re.match(
-        r"^(?P<Protocol>\w+://)?(?P<User>"
-        + word_char
-        + r"+@)?(?P<Host>[\w.-]+)"
-        + r"(:(?P<Port>\d+))?[/:](?P<Project>"
-        + word_char
-        + r"+/"
-        + word_char
-        + r"+?)(\.git)?$",
-        url,
-    )
-    if remote:
-        break
+
+
+def guess_remote():
+    for git_remote in THE_REPOSITORY.remotes:
+        url = next(git_remote.urls)
+        word_char = r"[\w.-]"
+        remote = re.match(
+            r"^(?P<Protocol>\w+://)?(?P<User>"
+            + word_char
+            + r"+@)?(?P<Host>[\w.-]+)"
+            + r"(:(?P<Port>\d+))?[/:](?P<Project>"
+            + word_char
+            + r"+/"
+            + word_char
+            + r"+?)(\.git)?$",
+            url,
+        )
+        if remote:
+            return remote, git_remote.name
+    return None, None
 
 
 class UserError(Exception):
     pass
 
 
-if not remote:
+REMOTE, REMOTE_NAME = guess_remote()
+if REMOTE is None:
     raise UserError("Missing remote, don't know how to talk to GitLab")
-GITLAB = remote["Host"]
-GITLAB_PROJECT = remote["Project"]
+GITLAB = REMOTE["Host"]
+GITLAB_PROJECT = REMOTE["Project"]
 PROTOCOL = "http" if GITLAB == "localhost" else "https"
 
 GITLAB_PROJECT_ESC = urllib.parse.quote(GITLAB_PROJECT, safe="")
@@ -120,7 +123,7 @@ def diff_for_newfile(base, head, path) -> unidiff.PatchedFile:
 
 
 @lru_cache(maxsize=None)
-def users():
+def load_users():
     if not (DIR / "users.json").is_file():
         gather_users()
     with open(DIR / "users.json") as f:
@@ -135,7 +138,7 @@ def lookup_user(*, name=None, username=None):
             with open(DIR / "users.json") as f:
                 us = json.load(f)
         else:
-            us = users()
+            us = load_users()
         for user in us:
             if name is not None and user["name"] == name:
                 return user
@@ -168,11 +171,11 @@ def milestone_title_to_id(milestone_title):
         for milestone in ms:
             if milestone["title"] == milestone_title:
                 return milestone["id"]
-    assert 0, f'no such milestone "{milestone_title}"'
+    return [0]
 
 
 @lru_cache(maxsize=None)
-def labels():
+def load_labels():
     if not (DIR / "labels.json").is_file():
         fetch_labels()
     with open(DIR / "labels.json") as f:
@@ -186,7 +189,7 @@ def fetch_commit(ref):
         THE_REPOSITORY.git().execute(("git", "fetch", REMOTE_NAME, ref))
 
 
-def context(base, head, old_path, old_line, new_path, new_line):
+def diff_context(base, head, old_line, new_path, new_line):
     fetch_commit(base)
     fetch_commit(head)
     try:
@@ -331,21 +334,21 @@ def load_issues_and_merge_requests():
             return json.load(i), json.load(m)
 
 
-def update_global(what, thing, fetch=True):
+def update_global(what, thing, fetch_first=True):
     """
     Edit the list of MRs/issues in-place, updating the given issue/MR.
     """
-    if fetch:
+    if fetch_first:
         if DRY_RUN:
             return thing
         newthing = gitlab_request("get", f"{what}/{thing['iid']}").json()
     path = DIR / f"{what}.json"
     old = json.loads(path.read_bytes())
-    if fetch:
+    if fetch_first:
         new = []
         added = False
         for t in old:
-            if fetch:
+            if fetch_first:
                 if t["iid"] == newthing["iid"]:
                     new += [newthing]
                     added = True
@@ -372,7 +375,7 @@ def lazy_fetch_merge_request(*, branch=None, iid=None):
             elif iid is not None:
                 return next(mr for mr in merge_requests if mr["iid"] == iid)
             assert False
-        except Exception as e:
+        except StopIteration as e:
             if attempt == "miss":
                 print(
                     f"no merge request branch={branch} iid={iid}", file=sys.stderr)
@@ -411,7 +414,7 @@ def show_discussion(discussions):
         out += f"{location}{discussion['id']}\n"
         out += commit_human
         if "position" in n0:
-            out += context(base, head, old_path, old_line, new_path, new_line)
+            out += diff_context(base, head, old_line, new_path, new_line)
         for note in notes:
             lines = note["body"].splitlines()
             author = note["author"]["username"]
@@ -473,7 +476,7 @@ def cmd_create():
     else:
         what = "issues"
     thing = post(what, data=data).json()
-    update_global(what, thing, fetch=False)
+    update_global(what, thing, fetch_first=False)
     if "source_branch" in data:
         fetch_mr_data(thing)
     else:
@@ -483,7 +486,7 @@ def cmd_create():
 
 
 def issue_template_callback(data, branch, issue_id):
-    pass
+    del data, branch, issue_id
 
 
 def cmd_template(branch=None, issue_id=None):
@@ -558,7 +561,8 @@ def fetch_issue_data(issue):
         new_pristine_path = idir / "new-pristine-comments.gl"
         new_pristine_path.write_text(comments)
         subprocess.run(
-            ("git", "merge-file", comments_path, pristine_path, new_pristine_path)
+            ("git", "merge-file", comments_path, pristine_path, new_pristine_path),
+            check=False,
         )
         new_pristine_path.rename(pristine_path)
     else:
@@ -595,7 +599,8 @@ def fetch_mr_data(merge_request):
         new_pristine_path = mrdir / "new-pristine-todo.gl"
         new_pristine_path.write_text(todo)
         subprocess.run(
-            ("git", "merge-file", todo_path, pristine_path, new_pristine_path)
+            ("git", "merge-file", todo_path, pristine_path, new_pristine_path),
+            check=False,
         )
         new_pristine_path.rename(pristine_path)
     else:
@@ -723,10 +728,7 @@ def parse_metadata_header(rows, thing):
                 if not milestone:
                     data["milestone_id"] = [0]
                 else:
-                    try:
-                        data["milestone_id"] = milestone_title_to_id(milestone)
-                    except Exception as e:
-                        print(e)
+                    data["milestone_id"] = milestone_title_to_id(milestone)
             continue
         prefix = f"{MARKER}    labels:"
         if row.startswith(prefix):
@@ -754,29 +756,26 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
     desc_changed = False
     note_id = None
     i, data = parse_metadata_header(rows, thing)
-    if data:
+    if data and False:  # TODO
         if not DRY_RUN:  # TODO
-            try:  # These are a bit unreliable.
-                current = gitlab_request("get", f"{what}/{thing['iid']}").json()
-                for key in data:
-                    if (
-                        key.endswith("_id")
-                        or key.endswith("_ids")
-                        or key.endswith("_event")
-                    ):
-                        continue
-                    if thing[key] != current[key]:
-                        assert (
-                            0
-                        ), f"outdated {key} - have {thing[key]} but upstream has {current[key]}"
-                put(
-                    f"{what}/{thing['iid']}",
-                    data=data,
-                )
-                changed = True
-                desc_changed = True
-            except Exception as e:
-                print(e, file=sys.stderr)
+            current = gitlab_request("get", f"{what}/{thing['iid']}").json()
+            for key in data:
+                if (
+                    key.endswith("_id")
+                    or key.endswith("_ids")
+                    or key.endswith("_event")
+                ):
+                    continue
+                if thing[key] != current[key]:
+                    assert (
+                        0
+                    ), f"outdated {key} - have {thing[key]} but upstream has {current[key]}"
+            put(
+                f"{what}/{thing['iid']}",
+                data=data,
+            )
+            changed = True
+            desc_changed = True
     for row in rows[i:]:
         if state == "NEW_DISCUSSION":
             if row == MARKER:
@@ -979,7 +978,8 @@ def cmd_discuss(branch, commit, file, line_type, old_line, new_line):
         f.write(header)
         f.write(context + "\n")
     subprocess.run(
-        os.environ["EDITOR"] + " +123123 " + shlex.quote(str(review)), shell=True
+        os.environ["EDITOR"] + " +123123 " + shlex.quote(str(review)), shell=True,
+        check=True,
     )
 
 
@@ -1155,10 +1155,10 @@ def cmd_activity():
         if branch_or_issue in brissue_to_discussions:
             continue
         if isissue(branch_or_issue):
-            dir = issue_dir(branch_or_issue)
+            directory = issue_dir(branch_or_issue)
         else:
-            dir = branch_mrdir(branch_or_issue)
-        brissue_to_discussions[branch_or_issue] = load_discussions(dir)
+            directory = branch_mrdir(branch_or_issue)
+        brissue_to_discussions[branch_or_issue] = load_discussions(directory)
     file_to_contents = {}
     entries_with_file = []
     for link, title, branch_or_issue, note_id in entries:
@@ -1200,7 +1200,7 @@ def cmd_activity():
             continue
         file_to_contents[filepath] = filepath.read_text().splitlines()
     s = ""
-    us = users()
+    us = load_users()
     user_re = re.compile(
         r"\b(" + "|".join(re.escape(u["name"]) for u in us) + r")\b")
     for (
@@ -1282,9 +1282,9 @@ def fetch_labels():
 def cmd_staticwords():
     print(
         "\n".join(
-            [x["username"] for x in users()]
+            [x["username"] for x in load_users()]
             + [x["title"] for x in load_milestones()]
-            + [x["name"] for x in labels()]
+            + [x["name"] for x in load_labels()]
         )
     )
 
