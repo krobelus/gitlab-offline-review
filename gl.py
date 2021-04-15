@@ -1042,30 +1042,6 @@ def submit_review(merge_request, mrdir):
     return True  # changed
 
 
-def Context(branch, discussion_id):
-    mrdir = branch_mrdir(branch)
-    discussions = load_discussions(mrdir)
-    discussion = next(d for d in discussions if d["id"] == discussion_id)
-    n0 = discussion["notes"][0]
-    pos = n0["position"]
-    argv = (
-        "git",
-        "diff",
-        pos["base_sha"],
-        pos["head_sha"],
-        "--",
-        pos["old_path"],
-        pos["new_path"],
-    )
-    print(" ".join(argv))
-    print()
-    sys.stdout.flush()
-    subprocess.run(
-        argv,
-        check=True,
-    )
-
-
 def cmd_url2path(url):
     branch_or_issue = parse_path(url)[0]
     if isissue(branch_or_issue):  # Issue.
