@@ -1330,7 +1330,7 @@ def main():
         help="do not perform any network requests, only print what would happen",
     )
     kwargs = {}
-    if (sys.version_info.major, sys.version_info.minor) >= 3.7:
+    if (sys.version_info.major, sys.version_info.minor) >= (3, 7):
         kwargs["required"] = True
     subparser = parser.add_subparsers(
         metavar="<subcommand>",
