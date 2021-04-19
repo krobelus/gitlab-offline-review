@@ -526,6 +526,8 @@ def metadata_header(thing):
             + ",".join(a["username"] for a in thing["reviewers"])
             + "\n"
         )
+        if "remove_source_branch" in thing:
+            extra += f"{MARKER} remove_source_branch: {thing['remove_source_branch']}\n"
     return (
         f'{thing["title"]}\n\n'
         + ("\n" if thing["description"]
@@ -713,6 +715,12 @@ def parse_metadata_header(rows, thing):
                     data["reviewer_ids"] = [
                         lookup_user(username=a)["id"] for a in reviewers.split(",")
                     ]
+            continue
+        prefix = f"{MARKER} remove_source_branch:"
+        if row.startswith(prefix):
+            arg = bool(row[len(prefix):].lstrip())
+            if thing is None or arg != thing.get("remove_source_branch"):
+                data["remove_source_branch"] = arg
             continue
         prefix = f"{MARKER} milestone:"
         if row.startswith(prefix):
