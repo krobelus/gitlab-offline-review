@@ -350,3 +350,7 @@ define-command gl-browse-url -docstring %{
 	xdg-open "$(gl.py path2url "$kak_buffile")"
 } }
 ```
+
+## Related Projects
+
+- [Bichon](https://gitlab.com/bichon-project/bichon)
