@@ -1074,6 +1074,10 @@ def url_to_path(arg, merge_requests=None):
     mr_id = int(match.group(2))
     if merge_requests is None:
         merge_request = lazy_fetch_merge_request(iid=mr_id)
+    else:
+        merge_request = next(
+            mr for mr in merge_requests if mr["iid"] == mr_id
+        )
     return merge_request["source_branch"], note_id
 
 
