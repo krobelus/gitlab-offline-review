@@ -273,22 +273,24 @@ def delete(path, **kwargs):
     return gitlab_request("delete", path, **kwargs)
 
 
-def get(path, **kwargs):
+def get(path, per_page=100, all_pages=True, **kwargs):
     "Send an HTTP GET request to GitLab"
     ppath = path
-    if "?" in path:
-        ppath = path + "&per_page=100"
-    else:
-        ppath = path + "?per_page=100"
+    if per_page:
+        if "?" in path:
+            ppath = path + f"&per_page={per_page}"
+        else:
+            ppath = path + f"?per_page={per_page}"
     r = gitlab_request("get", ppath, **kwargs)
     if r is None:
         return
     data = r.json()
     next_page = r.headers.get("X-Next-Page")
-    while next_page:
-        r = gitlab_request("get", ppath + f"&page={next_page}")
-        next_page = r.headers.get("X-Next-Page")
-        data += r.json()
+    if all_pages:
+        while next_page:
+            r = gitlab_request("get", ppath + f"&page={next_page}")
+            next_page = r.headers.get("X-Next-Page")
+            data += r.json()
     return data
 
 
