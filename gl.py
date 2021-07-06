@@ -577,7 +577,7 @@ def fetch_issue_data(issue):
 def fetch_mr_data(merge_request):
     branch = merge_request["source_branch"]
     mrdir = branch_mrdir(branch)
-    mrdir.mkdir(exist_ok=True)
+    mrdir.mkdir(exist_ok=True, parents=True)
     discussions = get(f"merge_requests/{merge_request['iid']}/discussions")
     if DRY_RUN:
         return
@@ -980,7 +980,7 @@ def cmd_discuss(branch, commit, file, line_type, old_line, new_line):
         context = f" ? UnicodeEncodeError {commit}\n"
 
     mrdir = branch_mrdir(merge_request["source_branch"])
-    mrdir.mkdir(exist_ok=True)
+    mrdir.mkdir(exist_ok=True, parents=True)
 
     review = mrdir / "review.gl"
     with open(review, "a") as f:
