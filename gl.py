@@ -1100,13 +1100,16 @@ def cmd_path2url(branches_and_issues):
 
 def test_parse_path():
     # Branch
-    assert parse_path("/path/to/repo/gl/some-branch/todo.gl")[0] == "some-branch"
+    assert parse_path(WORKING_TREE + "/gl/some-branch/todo.gl")[0] == "some-branch"
     assert parse_path("gl/some-branch/todo.gl")[0] == "some-branch"
     assert parse_path("gl/some-branch/")[0] == "some-branch"
     assert parse_path("some-branch")[0] == "some-branch"
+    assert parse_path(WORKING_TREE + "/gl/branch/with/slashes")[0] == "branch/with/slashes"
+    assert parse_path("gl/branch/with/slashes")[0] == "branch/with/slashes"
+    assert parse_path("branch/with/slashes")[0] == "branch/with/slashes"
 
     # Issues
-    assert parse_path("/path/to/repo/gl/i/123/comments.gl")[0] == 123
+    assert parse_path(WORKING_TREE + "/gl/i/123/comments.gl")[0] == 123
     assert parse_path("gl/i/123/comments.gl")[0] == 123
     assert parse_path("gl/i/123/")[0] == 123
     assert parse_path("i/123/")[0] == 123
@@ -1129,7 +1132,11 @@ def parse_path(path, merge_requests=None):
         p = p.parent
     if p.parent.name == "i":
         return int(p.name), note_id
-    return p.name, note_id
+    if p.is_absolute():
+        p = p.relative_to(WORKING_TREE)
+    if p.is_relative_to(GLDIR):
+        p = p.relative_to(GLDIR)
+    return str(p), note_id
 
 
 def atom_updated(ns, element):
