@@ -306,20 +306,20 @@ the editor to run `gl.py fetch` and `gl.py submit` for the current file.
 define-command -override gl-fetch -docstring %{
 	Fetch new comments for the current issue/MR
 } %{
-	evaluate-commands %sh{
-		gl.py fetch "$kak_buffile" >&2 ||
-		echo fail "gl.py error"
+	nop %sh{
+		gl fetch "$kak_buffile" >/dev/null 2>&1 </dev/null &
 	}
 }
 define-command -override gl-submit -docstring %{
 	Submit comments for the current issue/MR
 } %{
 	write -sync
+	nop %sh{
+		gl submit "$kak_buffile" >/dev/null 2>&1 </dev/null &
+	}
+	# The review draft will be deleted, so  switch to the unresolved threads.
 	evaluate-commands %sh{
-		gl.py submit "$kak_buffile" >&2 ||
-		echo fail "gl.py error"
-		# The review draft will be deleted, so  switch to the unresolved threads.
-		[ ${kak_bufname##*/} = review.gl ] && echo edit ${kak_bufname%/*}/todo.gl
+		[ ${kak_bufname##*/} = review.gl ] && echo edit "${kak_bufname%/*}/"todo.gl 
 	}
 }
 ```
@@ -334,7 +334,7 @@ define-command -override gl-visit-url-from-clipboard -docstring %{
 } %{
 	edit %sh{
 		set -e
-		path="$(gl.py url2path "$(xclip -out)")"
+		path=$(gl.py url2path "$(xclip -out)")
 		printf %s "$path"
 		( gl.py fetch "$path" </dev/null >/dev/null 2>&1 ) &
 	}
