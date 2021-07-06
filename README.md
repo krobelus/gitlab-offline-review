@@ -193,7 +193,7 @@ README.md:2: 36fec6809fa431d765cc1654a3e8c2d8d04b7cbc
  # My to-do list
 -* [ ] Publish `gl.py`
 +* [x] Publish `gl.py`
-	[rreviewer] 🐣
+	[rreviewer] Some review comment 🐣
 ```
 
 Observe:
@@ -281,6 +281,15 @@ one (by typing `ac`):
 
 ```
 bind generic ac !gl.py discuss %(branch) %(commit) %(file) %(text) %(lineno_old) %(lineno)
+```
+
+Nowadays I tend to use a setup with two split windows: Tig plus an editor
+window.  This binding also adds a review comment, but does not replace Tig
+with an editor.  Instead, it copies the path of the file, which you can then
+open in the editor.
+
+```
+bind generic as @sh -c 'EDITOR=true gl discuss %(branch) %(commit) "$1" "$2" %(lineno_old) %(lineno); echo -n "gl/%(branch)/review.gl" | xclip' -- %(file) %(text)
 ```
 
 ### [Kakoune](https://kakoune.org)
