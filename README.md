@@ -1,7 +1,7 @@
 # gitlab-offline-review
 
-GitLab and GitHub have many advantages but their web-based code review UI lack
-flexibility. Those UIs are not meant to be customized or integrated with other
+GitLab and GitHub have many advantages but their web-based code review UIs
+lack flexibility. They are not meant to be customized or integrated with other
 tools. Additionally, they can be real slow and refuse to handle large diffs.
 To overcome those limitations, I prefer to use native applications like
 an editor or a Git frontend. By default, those apps don't know how to talk
