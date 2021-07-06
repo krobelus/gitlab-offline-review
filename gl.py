@@ -1309,6 +1309,10 @@ def cmd_fetchstatic():
     fetch_labels()
 
 
+def cmd_fetchmilestones():
+    fetch_milestones()
+
+
 def cmd_retry(branch):
     branch = parse_path(branch)[0]
     merge_request = lazy_fetch_merge_request(branch=branch)
@@ -1426,6 +1430,13 @@ def main():
         description="Fetch users, milestones and labels for this repository",
     )
     parser_fetchstatic.set_defaults(func=cmd_fetchstatic)
+
+    parser_fetchmilestones = subparser.add_parser(
+        "fetchmilestones",
+        help="fetch  milestones for this repository",
+        description="Fetch milestones for this repository",
+    )
+    parser_fetchmilestones.set_defaults(func=cmd_fetchmilestones)
 
     parser_template = subparser.add_parser(
         "template",
