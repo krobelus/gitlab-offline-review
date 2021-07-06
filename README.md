@@ -351,6 +351,12 @@ define-command gl-browse-url -docstring %{
 } }
 ```
 
+## Running tests
+
+```sh
+pytest gl.py
+```
+
 ## Related Projects
 
 - [Bichon](https://gitlab.com/bichon-project/bichon)

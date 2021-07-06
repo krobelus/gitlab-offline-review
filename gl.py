@@ -1098,6 +1098,20 @@ def cmd_path2url(branches_and_issues):
         )
 
 
+def test_parse_path():
+    # Branch
+    assert parse_path("/path/to/repo/gl/some-branch/todo.gl")[0] == "some-branch"
+    assert parse_path("gl/some-branch/todo.gl")[0] == "some-branch"
+    assert parse_path("gl/some-branch/")[0] == "some-branch"
+    assert parse_path("some-branch")[0] == "some-branch"
+
+    # Issues
+    assert parse_path("/path/to/repo/gl/i/123/comments.gl")[0] == 123
+    assert parse_path("gl/i/123/comments.gl")[0] == 123
+    assert parse_path("gl/i/123/")[0] == 123
+    assert parse_path("i/123/")[0] == 123
+    assert parse_path("123")[0] == 123
+
 def parse_path(path, merge_requests=None):
     if isinstance(path, Path):
         path = str(path)
