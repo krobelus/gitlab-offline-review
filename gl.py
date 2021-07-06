@@ -257,13 +257,13 @@ def gitlab_request(method, path, **kwargs):
     if "data" in kwargs:
         data = json.dumps(kwargs["data"], indent=2).replace('"', '\\"')
         trace += f' --data "{data}"'
-    print(trace)
+    print(trace, file=sys.stderr)
     if not DRY_RUN:
         r = requests.request(method, url, headers={
                              "PRIVATE-TOKEN": token()}, **kwargs)
         if not r.ok:
-            print(r, r.reason)
-            print(r.content.decode())
+            print(r, r.reason, file=sys.stderr)
+            print(r.content.decode(), file=sys.stderr)
         assert r.ok, f"HTTP {method} failed: {url}"
     return r
 
