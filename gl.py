@@ -956,7 +956,7 @@ def submit_issue_data(issue):
     return changed, desc_changed
 
 
-def cmd_discuss(branch, commit, file, line_type, old_line, new_line):
+def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line, new_line):
     "Draft a review comment."
     merge_request = lazy_fetch_merge_request(branch=branch)
 
@@ -964,16 +964,28 @@ def cmd_discuss(branch, commit, file, line_type, old_line, new_line):
     assert line_type in " -+"
     old_line = int(old_line)
     new_line = int(new_line)
+    file = new_file
+    line = new_line
+    if new_file == "/dev/null":
+        file = old_file
+        line = old_line
 
     try:
         hunk = diff_for_newfile(f"{commit}~", commit, file)[0]
         rows = []
         for i, row in enumerate(hunk):
-            if row.target_line_no is None:
-                continue
-            if row.target_line_no >= new_line:
-                rows = hunk[: i + 1]
-                break
+            if new_file == "/dev/null":
+                if row.source_line_no is None:
+                    continue
+                if row.source_line_no >= old_line:
+                    rows = hunk[: i + 1]
+                    break
+            else:
+                if row.target_line_no is None:
+                    continue
+                if row.target_line_no >= new_line:
+                    rows = hunk[: i + 1]
+                    break
         context = "".join(
             r.line_type + r.value for r in rows[-DIFF_CONTEXT_LINES:])
     except UnicodeEncodeError:
@@ -1421,7 +1433,10 @@ def main():
     )
     parser_discuss.add_argument("commit", metavar="<commit>", help="commit ID")
     parser_discuss.add_argument(
-        "file", metavar="<file>", help="file name, relative to top level"
+        "old_file", metavar="<old_file>", help="file name before rename or deletion, relative to top level"
+    )
+    parser_discuss.add_argument(
+        "new_file", metavar="<new_file>", help="current file name, relative to top level"
     )
     parser_discuss.add_argument(
         "line_type",

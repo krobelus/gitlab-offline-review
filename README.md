@@ -219,14 +219,15 @@ not a problem when using the [Tig integration](#Tig), but maybe this could
 be simplified.
 1. the source branch name.
 2. the commit SHA of the diff to comment on.
-3. the filename; the full relative path.
-4. the first character of the diff line
+3. the relative path of the old filename
+4. the relative path of the new filename
+5. the first character of the diff line
    - `"+"` if the line is added
    - `"-"` if the line deleted
    - `" "` (a space) for context lines
    You can also pass the entire line, only the first character is relevant.
-5. the line number in the old version of the file
-6. the line number in the new version of the file
+6. the line number in the old version of the file
+7. the line number in the new version of the file
 
 A command like `gl.py discuss <branch> <commit> <file> + <old_line> <new_line>`
 will add an entry like this to a MR's `review.gl`:
