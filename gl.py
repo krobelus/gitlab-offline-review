@@ -1134,8 +1134,10 @@ def parse_path(path, merge_requests=None):
         return int(p.name), note_id
     if p.is_absolute():
         p = p.relative_to(WORKING_TREE)
-    if p.is_relative_to(GLDIR):
+    try:
         p = p.relative_to(GLDIR)
+    except ValueError:
+        pass
     return str(p), note_id
 
 
