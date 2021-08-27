@@ -832,11 +832,11 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
                     )
                     changed = False
                 continue
-            if re.match(r"^!!!merge$", row):
+            if re.match(r"^!merge$", row):
                 put(f"{what}/{what_id}/merge")
                 changed = True
                 continue
-        if re.match(r"^!!!delete$", row):
+        if re.match(r"^!delete$", row):
             delete(
                 f'{what}/{what_id}/discussions/{discussion["id"]}/notes/{note_id}')
             changed = True
