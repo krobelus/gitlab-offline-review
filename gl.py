@@ -206,7 +206,7 @@ def diff_context(base, head, old_line, new_path, new_line):
     else:
         line = old_line
         rows = hunk.source
-    the_context = "".join(rows[max(0, line - DIFF_CONTEXT_LINES): line])
+    the_context = "".join(rows[max(0, line - DIFF_CONTEXT_LINES):line])
     if not the_context.endswith("\n"):
         the_context += "\n"
     return the_context
