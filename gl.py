@@ -326,14 +326,15 @@ def load_global(what):
     Load data that is not specific to a single issue/MR.
     For example users, milestones, issue list or MR list.
     """
-    with open(DIR / f"{what}.json") as f:
+    path = DIR / f"{what}.json"
+    if not path.exists():
+        return fetch_global(what)
+    with open(path) as f:
         return json.load(f)
 
 
 def load_issues_and_merge_requests():
-    with open(DIR / "issues.json") as i:
-        with open(DIR / "merge_requests.json") as m:
-            return json.load(i), json.load(m)
+    return load_global("issues"), load_global(MERGE_REQUESTS)
 
 
 def update_global(what, thing, fetch_first=True):
