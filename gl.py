@@ -948,7 +948,9 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
                     changed = False
                 continue
             if re.match(r"^!merge$", row):
-                put(f"{what}/{merge_request[ISSUE_ID]}/merge")
+                put(f"{what}/{merge_request[ISSUE_ID]}/merge", data={
+                    "merge_when_pipeline_succeeds": True,
+                })
                 changed = True
                 continue
         if re.match(r"^!close$", row):
