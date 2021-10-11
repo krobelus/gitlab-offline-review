@@ -599,9 +599,13 @@ def cmd_template(branch=None, issue_id=None):
         if branch is None:
             branch = MERGE_REQUEST_SOURCE_BRANCH
         else:
-            data[ISSUE_DESCRIPTION] += THE_REPOSITORY.git().log(
-                "--format=%s", f"{REMOTE_NAME}/{target_branch}..{branch}")
-            data[ISSUE_DESCRIPTION] += "\n"
+            shortlog = THE_REPOSITORY.git().log(
+                "--format=%h %s", f"{REMOTE_NAME}/{target_branch}..{branch}")
+            if shortlog.count("\n") == 0:
+                data["title"] = shortlog.split(" ", maxsplit=1)[1].strip()
+            else:
+                data[ISSUE_DESCRIPTION] += shortlog
+                data[ISSUE_DESCRIPTION] += "\n"
         if not GITHUB:
             data["assignees"] = (lookup_user(username=GITLAB_USER), )
             data["reviewers"] = ()
