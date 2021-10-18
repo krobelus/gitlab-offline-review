@@ -370,3 +370,10 @@ pytest gl.py
 ## Related Projects
 
 - [Bichon](https://gitlab.com/bichon-project/bichon)
+
+Since I wrote this, I discovered two commandline tools that can be used to
+bake a similar workflow:
+
+- [lab](https://github.com/zaquestion/lab)
+- [glab](https://github.com/profclems/glab)
+
