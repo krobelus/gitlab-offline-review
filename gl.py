@@ -576,7 +576,7 @@ def cmd_create():
         fetch_issue_data(thing)
     print()
     if GITHUB:
-        print(thing)
+        print(thing["html_url"])
     else:
         print(thing["web_url"])
 
