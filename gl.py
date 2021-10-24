@@ -1337,11 +1337,13 @@ def cmd_path2url(branches_and_issues):
             print(
                 f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}issues/{branch_or_issue}"
             )
+            continue
         merge_requests = load_global(MERGE_REQUESTS)
         merge_request = next(mr for mr in merge_requests
                              if branch_name(mr) == branch_or_issue)
+        mr = "pull" if GITHUB else MERGE_REQUESTS
         print(
-            f'{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}'
+            f'{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}{mr}/{merge_request[ISSUE_ID]}'
         )
 
 
