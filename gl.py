@@ -1246,8 +1246,8 @@ def submit_review(merge_request, mrdir):
                 "position": old_line,
             }]
         data = {
-            # "body": "Thanks!",
-            # "event": "COMMENT",
+            "body": " ",
+            "event": "COMMENT",
             "comments": comments,
         }
         if comments:
