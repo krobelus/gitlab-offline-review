@@ -460,9 +460,24 @@ def discussion_notes(discussion):
 
 
 def show_discussion(discussions):
+    if GITHUB:
+        ds = []
+        for discussion in discussions:
+            if "in_reply_to_id" not in discussion:
+                ds += [{
+                    "id": discussion["id"],
+                    "notes": [discussion],
+                }]
+                continue
+            for i in range(len(ds)):
+                if discussion["in_reply_to_id"] == ds[i]["id"]:
+                    break
+            assert i < len(ds)
+            ds[i]["notes"] += [discussion]
+        discussions = ds
     out = ""
     for discussion in discussions:
-        notes = discussion_notes(discussion)
+        notes = discussion["notes"]
         n0 = notes[0]
         if "position" not in n0:
             location = ""
