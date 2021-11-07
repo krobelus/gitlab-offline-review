@@ -494,13 +494,12 @@ def show_discussion(discussions):
                 commit_human += "\n"
             except GitCommandError:
                 commit_human = ""
-        discussion_id = '0000000000000000000000000000000000000000' if GITHUB else discussion[
-            "id"]
+        discussion_id = discussion["id"]
         if GITHUB:
             if location:
-                out += f"{location}{discussion_id}\n"
+                out += f"{location}{MARKER} {discussion_id}\n"
         else:
-            out += f"{location}{discussion_id}\n"
+            out += f"{location}{MARKER} {discussion_id}\n"
         out += commit_human
         if "position" in n0:
             out += diff_context(base, head, old_line, new_path, new_line)
@@ -913,7 +912,7 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
                 new_discussions = [[]]
             new_discussions[len(new_discussions) - 1] += [row]
             continue
-        if row.startswith(MARKER):
+        if row == MARKER:
             state = "NEW_DISCUSSION"
             continue
         note_header = re.match(r"^\t\[(\d+)\] ", row)
@@ -923,7 +922,7 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
                 did = next(i for i, discussion in enumerate(discussions)
                            if discussion["id"] == note_id)
                 comments[did] = {}
-        location = re.match(r"^(?:[^:]+:\d+: )?([0-9a-f]{40})$", row)
+        location = re.match(r"^(?:[^:]+:\d+: )?" + MARKER + " ([0-9a-f]+)$", row)
         if location:
             if not GITHUB:
                 note_id = None
