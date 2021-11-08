@@ -992,7 +992,7 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
             elif re.match(r"^[ +-]", row):
                 continue
         if state == "COMMENTS":
-            if re.match(r"^\t\[\w+\]", row):
+            if re.match(r"^\t\[[\w-]+\]", row):
                 note_id = None
             tag = re.match(r"^\t\[(\d+)\] (.*)", row)
             if tag:
