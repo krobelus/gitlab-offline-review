@@ -1142,6 +1142,8 @@ def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
         github_line = 0
         base = merge_request["base"]["sha"]
         head = merge_request["head"]["sha"]
+        # The base may be behind the latest head of the default branch.
+        base = THE_REPOSITORY.git().merge_base(base, head)
         fetch_commit(base)
         fetch_commit(head)
         hunks = diff_for_newfile(base, head, file, context=3)
