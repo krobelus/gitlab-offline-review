@@ -1122,7 +1122,7 @@ def submit_issue_data(issue):
 def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
                 new_line):
     "Draft a review comment."
-    if GITHUB and not THE_REPOSITORY.git().branch("--list", f"origin/{branch}"):
+    if GITHUB and THE_REPOSITORY.git().branch("--list", f"origin/{branch}"):
         pr_branch = THE_REPOSITORY.git().for_each_ref(f'--points-at={branch}', f'refs/remotes/{REMOTE_NAME}/pr-*')
         if pr_branch:
             branch = os.path.basename(pr_branch)
