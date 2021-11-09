@@ -939,9 +939,13 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
                 comments[did] = {}
         location = re.match(r"^(?:[^:]+:\d+: )?" + MARKER + " ([0-9a-f]+)$", row)
         if location:
-            if not GITHUB:
+            discussion_id = location.group(1)
+            if GITHUB:
+                did = next(i for i, discussion in enumerate(discussions)
+                           if str(discussion["id"]) == discussion_id)
+                comments[did] = {}
+            else:
                 note_id = None
-                discussion_id = location.group(1)
                 did, discussion = next(
                     (i, discussion) for i, discussion in enumerate(discussions)
                     if str(discussion["id"]) == discussion_id)
