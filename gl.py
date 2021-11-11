@@ -1656,6 +1656,14 @@ def cmd_cancelreview(branch):
     cancelreview(merge_request)
 
 
+def cmd_merge(branch):
+    branch = parse_path(branch)[0]
+    merge_request = lazy_fetch_merge_request(branch=branch)
+    put(f"{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/merge", data={
+        "merge_when_pipeline_succeeds": True,
+    })
+
+
 def main():
     parser = argparse.ArgumentParser(description=USAGE)
     parser.add_argument(
@@ -1837,6 +1845,15 @@ def main():
     parser_cmd_cancelreview.add_argument(metavar="<MR URL or branch>",
                                          dest="branch")
     parser_cmd_cancelreview.set_defaults(func=cmd_cancelreview)
+
+    parser_cmd_merge = subparser.add_parser(
+        "merge",
+        help='Merge a merge request',
+        description='Merge a merge request',
+    )
+    parser_cmd_merge.add_argument(metavar="<MR URL or branch>",
+                                         dest="branch")
+    parser_cmd_merge.set_defaults(func=cmd_merge)
 
     args = parser.parse_args()
     if args.dry_run:
