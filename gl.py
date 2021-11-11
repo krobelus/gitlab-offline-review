@@ -919,6 +919,19 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
             changed = True
             desc_changed = True
     for row in rows[i:]:
+        if merge_request is not None:
+            if re.match(r"^!merge$", row):
+                put(f"{what}/{merge_request[ISSUE_ID]}/merge", data={
+                    "merge_when_pipeline_succeeds": True,
+                })
+                changed = True
+                continue
+        if re.match(r"^!close$", row):
+            patch(f"{what}/{what_id}", data={
+                "state": "closed",
+            })
+            changed = True
+            continue
         if state == "NEW_DISCUSSION":
             if row == MARKER:
                 new_discussions += [[]]
@@ -969,18 +982,6 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
                         )
                     changed = False
                 continue
-            if re.match(r"^!merge$", row):
-                put(f"{what}/{merge_request[ISSUE_ID]}/merge", data={
-                    "merge_when_pipeline_succeeds": True,
-                })
-                changed = True
-                continue
-        if re.match(r"^!close$", row):
-            patch(f"{what}/{what_id}", data={
-                "state": "closed",
-            })
-            changed = True
-            continue
         if re.match(r"^!delete$", row):
             if GITHUB:
                 delete(f'{what}/{DISCUSSIONS}/{note_id}', data=data)
