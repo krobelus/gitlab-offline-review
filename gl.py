@@ -1650,6 +1650,13 @@ def cmd_cancelpipeline(branch):
 
 
 
+def cmd_approve(branch):
+    branch = parse_path(branch)[0]
+    merge_request = lazy_fetch_merge_request(branch=branch)
+    post(f'{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/approve')
+
+
+
 def cancelreview(merge_request):
     reviews = get(
         f'{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/reviews')
@@ -1876,6 +1883,15 @@ def main():
     parser_cmd_cancelpipeline.add_argument(metavar="<MR URL or branch>",
                                          dest="branch")
     parser_cmd_cancelpipeline.set_defaults(func=cmd_cancelpipeline)
+
+    parser_cmd_aprove = subparser.add_parser(
+        "approve",
+        help='Approve a MR',
+        description='Approve a MR',
+    )
+    parser_cmd_aprove.add_argument(metavar="<MR URL or branch>",
+                                         dest="branch")
+    parser_cmd_aprove.set_defaults(func=cmd_approve)
 
     args = parser.parse_args()
     if args.dry_run:
