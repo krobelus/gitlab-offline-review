@@ -1637,6 +1637,19 @@ def cmd_retry(branch):
         time.sleep(180)
 
 
+def cmd_cancelpipeline(branch):
+    branch = parse_path(branch)[0]
+    merge_request = lazy_fetch_merge_request(branch=branch)
+    pipeline = sorted(
+        get(
+            f"{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/pipelines/",
+        ),
+        key=lambda p: p["id"],
+    )[-1]
+    post(f'pipelines/{pipeline["id"]}/cancel')
+
+
+
 def cancelreview(merge_request):
     reviews = get(
         f'{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/reviews')
@@ -1854,6 +1867,15 @@ def main():
     parser_cmd_merge.add_argument(metavar="<MR URL or branch>",
                                          dest="branch")
     parser_cmd_merge.set_defaults(func=cmd_merge)
+
+    parser_cmd_cancelpipeline = subparser.add_parser(
+        "cancel",
+        help='Cancel a pipeline for a MR',
+        description='Cancel a pipeline for a MR',
+    )
+    parser_cmd_cancelpipeline.add_argument(metavar="<MR URL or branch>",
+                                         dest="branch")
+    parser_cmd_cancelpipeline.set_defaults(func=cmd_cancelpipeline)
 
     args = parser.parse_args()
     if args.dry_run:
