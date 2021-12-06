@@ -41,6 +41,7 @@ DRY_RUN = "N" in os.environ
 DIFF_CONTEXT_LINES = 5
 MARKER = "𑁍"
 GITLAB_USER = os.environ.get("GITLAB_USER")
+TRACE = True
 
 THE_REPOSITORY = git.Repo(search_parent_directories=True)
 WORKING_TREE = THE_REPOSITORY.working_tree_dir
@@ -314,7 +315,8 @@ def gitlab_request(method, path, **kwargs):
         if GITHUB:
             kwargs["json"] = kwargs["data"]
             del kwargs["data"]
-    print(trace, file=sys.stderr)
+    if TRACE:
+        print(trace, file=sys.stderr)
     if not DRY_RUN:
         r = requests.request(method, url, headers=headers, **kwargs)
         if not r.ok:
@@ -329,7 +331,7 @@ def delete(path, **kwargs):
     return gitlab_request("delete", path, **kwargs)
 
 
-def get(path, per_page=100, all_pages=True, **kwargs):
+def get(path, per_page=100, all_pages=True, raw=False, **kwargs):
     "Send an HTTP GET request to GitLab"
     ppath = path
     if per_page:
@@ -340,6 +342,8 @@ def get(path, per_page=100, all_pages=True, **kwargs):
     r = gitlab_request("get", ppath, **kwargs)
     if r is None:
         return
+    if raw:
+        return r
     data = r.json()
     next_page = r.headers.get("X-Next-Page")
     if all_pages:
@@ -431,10 +435,10 @@ def update_global(what, thing, fetch_first=True):
     return newthing
 
 
-def lazy_fetch_merge_request(*, branch=None, iid=None):
-    for attempt in ("hit", "miss"):
+def lazy_fetch_merge_request(*, branch=None, iid=None, attempts=2):
+    for attempt in range(attempts):
         try:
-            if attempt == "hit":
+            if attempt == 0:
                 if GITHUB:
                     # need to update head["SHA"]
                     merge_requests = fetch_global(MERGE_REQUESTS)
@@ -448,7 +452,7 @@ def lazy_fetch_merge_request(*, branch=None, iid=None):
                             if mr[ISSUE_ID] == iid)
             assert False
         except StopIteration as e:
-            if attempt == "miss" or GITHUB:
+            if attempt == 1 or GITHUB:
                 print(f"no merge request branch={branch} iid={iid}",
                       file=sys.stderr)
                 raise e
