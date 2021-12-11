@@ -193,9 +193,10 @@ def load_labels():
 
 def fetch_commit(ref):
     try:
-        THE_REPOSITORY.commit(ref)
+        return THE_REPOSITORY.commit(ref).hexsha
     except ValueError:
         THE_REPOSITORY.git().execute(("git", "fetch", REMOTE_NAME, ref))
+        return THE_REPOSITORY.commit(ref).hexsha
 
 
 def diff_context(base, head, old_line, new_path, new_line):
@@ -223,6 +224,10 @@ def diff_context(base, head, old_line, new_path, new_line):
 
 def isissue(branch_or_issue):
     return isinstance(branch_or_issue, int)
+
+
+def iscommit(path):
+    return path.startswith("c/")
 
 
 def mrdir_branch(mrdir):
@@ -280,6 +285,14 @@ def issue_dir(issue_id):
     output: /path/to/repo/gl/i/123
     """
     return DIR / "i" / str(issue_id)
+
+
+def commit_dir(commit_sha):
+    """
+    input:  123deadbeef
+    output: /path/to/repo/gl/c/123deadbeef
+    """
+    return DIR / "c" / commit_sha
 
 
 def gitlab_request(method, path, **kwargs):
@@ -463,21 +476,38 @@ def discussion_notes(discussion):
     return [discussion] if GITHUB else discussion["notes"]
 
 
-def show_discussion(discussions):
+def show_discussion(discussions, on_commit=False):
     if GITHUB:
         ds = []
         for discussion in discussions:
-            if "in_reply_to_id" not in discussion:
-                ds += [{
-                    "id": discussion["id"],
-                    "notes": [discussion],
-                }]
-                continue
-            for i in range(len(ds)):
-                if discussion["in_reply_to_id"] == ds[i]["id"]:
-                    break
-            assert i < len(ds)
-            ds[i]["notes"] += [discussion]
+            if on_commit:
+                position = discussion["position"]
+                path = discussion["path"]
+                i = 0
+                while i < len(ds):
+                    if (ds[i]["notes"][0]["path"] == path
+                            and ds[i]["notes"][0]["position"] == position):
+                        break
+                    i += 1
+                if i < len(ds):
+                    ds[i]["notes"] += [discussion]
+                else:
+                    ds += [{
+                        "id": discussion["id"],
+                        "notes": [discussion],
+                    }]
+            else:
+                if "in_reply_to_id" not in discussion:
+                    ds += [{
+                        "id": discussion["id"],
+                        "notes": [discussion],
+                    }]
+                    continue
+                for i in range(len(ds)):
+                    if discussion["in_reply_to_id"] == ds[i]["id"]:
+                        break
+                assert i < len(ds)
+                ds[i]["notes"] += [discussion]
         discussions = ds
     out = ""
     for discussion in discussions:
@@ -491,8 +521,11 @@ def show_discussion(discussions):
                 fetch_commit(head)
                 base = f"{head}~"
                 old_path = new_path = n0["path"]
-                old_line = n0["original_position"]
                 new_line = n0["position"]
+                if "original_position" in n0:
+                    old_line = n0["original_position"]
+                else:
+                    old_line = new_line  # Commit comments.
             else:
                 pos = n0["position"]
                 base = pos["base_sha"]
@@ -562,7 +595,7 @@ def fetch(branches_and_issues):
         issues = fetch_global("issues")
         fetched_all_issues = True
     want_branches = set(branch for branch in branches_and_issues
-                        if not isissue(branch))
+                        if not isissue(branch) and not iscommit(branch))
     if merge_requests is None or not want_branches.issubset(have_branches):
         merge_requests = fetch_global(MERGE_REQUESTS)
     for merge_request in merge_requests:
@@ -574,6 +607,9 @@ def fetch(branches_and_issues):
         if not fetched_all_issues:
             issue = update_global("issues", issue)
         fetch_issue_data(issue)
+    for commit in branches_and_issues:
+        if iscommit(commit):
+            fetch_commit_data(commit)
 
 
 def cmd_create():
@@ -742,6 +778,34 @@ def fetch_mr_data(merge_request):
         metadata_header(merge_request) + show_discussion(unresolvable))
 
 
+def fetch_commit_data(commit):
+    assert commit.startswith("c/")
+    commit_sha = commit[len("c/"):]
+    commitdir = commit_dir(commit_sha)
+    discussions = get(f"commits/{commit_sha}/{DISCUSSIONS}")
+    commitdir.mkdir(exist_ok=True, parents=True)
+    if discussions is not None:
+        (commitdir / f"{DISCUSSIONS}.json").write_text(
+            json.dumps(discussions, indent=1))
+    else:
+        discussions = load_discussions(commitdir)
+    comments = show_discussion(discussions, on_commit=True) + f"{MARKER}\n"
+    comments_path = commitdir / "comments.gl"
+    pristine_path = commitdir / "pristine-comments.gl"
+    if comments_path.exists():
+        new_pristine_path = commitdir / "new-pristine-comments.gl"
+        new_pristine_path.write_text(comments)
+        subprocess.run(
+            ("git", "merge-file", comments_path, pristine_path,
+             new_pristine_path),
+            check=False,
+        )
+        new_pristine_path.rename(pristine_path)
+    else:
+        comments_path.write_text(comments)
+        pristine_path.write_text(comments)
+
+
 def cmd_submit(branches_and_issues):
     branches_and_issues = [parse_path(p)[0] for p in branches_and_issues]
     issues, merge_requests = load_issues_and_merge_requests()
@@ -766,6 +830,14 @@ def cmd_submit(branches_and_issues):
             if changed:
                 fetch_issue_data(issue)
             continue
+
+        if iscommit(branch_or_issue):
+            commit = branch_or_issue
+            changed = submit_commit_data(commit)
+            if changed:
+                fetch_commit_data(commit)
+            continue
+
         mrdir = branch_mrdir(branch_or_issue)
         try:
             merge_request = next(mr for mr in merge_requests
@@ -872,8 +944,9 @@ def parse_metadata_header(rows, thing):
     description = "\n".join(description)
     if thing is None or description != dos2unix(thing[ISSUE_DESCRIPTION]):
         data[ISSUE_DESCRIPTION] = description
-    assert j == 0 or rows[j - 1].startswith(MARKER)
-    assert j == len(rows) or not rows[j].startswith(MARKER)
+    if j != 2:  # 2 means commit
+        assert j == 0 or rows[j - 1].startswith(MARKER)
+        assert j == len(rows) or not rows[j].startswith(MARKER)
     if GITHUB:
         if MERGE_REQUEST_SOURCE_BRANCH in data:
             data["maintainer_can_modify"] = True
@@ -890,10 +963,22 @@ def parse_metadata_header(rows, thing):
     return j, data
 
 
-def submit_discussion(discussions, rows, merge_request=None, issue=None):
-    thing = merge_request if merge_request is not None else issue
-    what = MERGE_REQUESTS if merge_request is not None else "issues"
-    what_id = thing[ISSUE_ID]
+def submit_discussion(discussions, rows, merge_request=None, issue=None, commit_sha=None):
+    if merge_request is not None:
+        thing = merge_request
+        what = MERGE_REQUESTS
+        what_special_snowflake = "issues" if GITHUB else MERGE_REQUESTS
+    elif issue is not None:
+        thing = issue
+        what_special_snowflake = what = "issues"
+    else:
+        thing = commit_sha
+        what_special_snowflake = what = "commits"
+    on_commit = commit_sha is not None
+    if on_commit:
+        what_id = commit_sha
+    else:
+        what_id = thing[ISSUE_ID]
     comments = {}  # discussion ID => note ID => text
     # if GITHUB: # TODO
     #     did = 0
@@ -904,7 +989,11 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
     changed = False
     desc_changed = False
     note_id = None
-    i, data = parse_metadata_header(rows, thing)
+    if on_commit:
+        i = 0
+        data = None
+    else:
+        i, data = parse_metadata_header(rows, None if on_commit else thing)
     if data and False:  # TODO
         if not DRY_RUN:  # TODO
             current = gitlab_request("get", f"{what}/{what_id}").json()
@@ -1025,11 +1114,11 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
             new_comments[did] += "\n" + row
             continue
     for new_discussion in new_discussions:
-        body = "\n".join(new_discussion)
-        if not body.strip():
+        if not new_discussion:
             continue
+        body = "\n".join(new_discussion)
         post(
-            f'issues/{what_id}/{DISCUSSIONS}'
+            f'{what_special_snowflake}/{what_id}/{DISCUSSIONS}'
             if GITHUB else f'{what}/{what_id}/{DISCUSSIONS}',
             data={
                 "body": body,
@@ -1042,7 +1131,11 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
             "body": comment,
         }
         if GITHUB:
-            data["in_reply_to"] = discussion["id"]
+            if on_commit:
+                data["path"] = discussion["path"]
+                data["position"] = discussion["position"]
+            else:
+                data["in_reply_to"] = discussion["id"]
         else:
             data["note_id"] = discussion["notes"][0]["id"],
         post(
@@ -1070,7 +1163,7 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None):
                         patch(f'pulls/{DISCUSSIONS}/{note_id}',
                               data=data)
                     else:
-                        patch(f'issues/{DISCUSSIONS}/{note_id}',
+                        patch(f'{what_special_snowflake}/{DISCUSSIONS}/{note_id}',
                               data=data)
                 else:
                     put(
@@ -1096,17 +1189,20 @@ def submit_mr_data(merge_request):
     changed, desc_changed = submit_discussion(discussions,
                                               rows,
                                               merge_request=merge_request)
-    pristine_path = mrdir / "pristine-todo.gl"
-    todo_path = mrdir / "todo.gl"
-    if not DRY_RUN:
-        try:
-            shutil.copy(pristine_path, todo_path)
-        except FileNotFoundError:  # When there was no thread.
-            pass
-    if submit_review(merge_request, mrdir):
+    update_discussion_file_optimistic(mrdir, "todo")
+    if submit_review(MERGE_REQUESTS, merge_request[ISSUE_ID], merge_request):
         changed = True
     return changed, desc_changed
 
+
+def update_discussion_file_optimistic(dir, name):
+    pristine_path = dir / f"pristine-{name}.gl"
+    path = dir / f"{name}.gl"
+    if not DRY_RUN:
+        try:
+            shutil.copy(pristine_path, path)
+        except FileNotFoundError:  # When there was no thread.
+            pass
 
 def submit_issue_data(issue):
     issue_id = issue[ISSUE_ID]
@@ -1128,14 +1224,37 @@ def submit_issue_data(issue):
     return changed, desc_changed
 
 
+def submit_commit_data(commit):
+    # c/12345abcd
+    commit_sha = commit[len("c/"):]
+    commitdir = commit_dir(commit_sha)
+    discussions = load_discussions(commitdir)
+    try:
+        contents = (commitdir / "comments.gl").read_text()
+        rows = contents.splitlines()
+    except FileNotFoundError:
+        rows = ()
+    changed, _desc_changed = submit_discussion(discussions,
+                                               rows,
+                                               commit_sha=commit_sha)
+    update_discussion_file_optimistic(commitdir, "comments")
+    if submit_review("commits", commit_sha, None):
+        changed = True
+    return changed
+
+
 def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
                 new_line):
     "Draft a review comment."
-    if GITHUB and THE_REPOSITORY.git().branch("--list", f"{REMOTE_NAME}/{branch}"):
-        pr_branch = THE_REPOSITORY.git().for_each_ref(f'--points-at={branch}', f'refs/remotes/{REMOTE_NAME}/pr-*')
-        if pr_branch:
-            branch = os.path.basename(pr_branch)
-    merge_request = lazy_fetch_merge_request(branch=branch)
+    on_commit = branch is None
+    if on_commit:
+        pass
+    else:
+        if GITHUB and THE_REPOSITORY.git().branch("--list", f"{REMOTE_NAME}/{branch}"):
+            pr_branch = THE_REPOSITORY.git().for_each_ref(f'--points-at={branch}', f'refs/remotes/{REMOTE_NAME}/pr-*')
+            if pr_branch:
+                branch = os.path.basename(pr_branch)
+        merge_request = lazy_fetch_merge_request(branch=branch)
 
     line_type = line_type[:1]
     assert line_type in " -+"
@@ -1149,12 +1268,16 @@ def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
 
     if GITHUB:
         github_line = 0
-        base = merge_request["base"]["sha"]
-        head = merge_request["head"]["sha"]
-        # The base may be behind the latest head of the default branch.
-        base = THE_REPOSITORY.git().merge_base(base, head)
-        fetch_commit(base)
-        fetch_commit(head)
+        if on_commit:
+            base = f"{commit}~"
+            head = commit
+        else:
+            base = merge_request["base"]["sha"]
+            head = merge_request["head"]["sha"]
+            # The base may be behind the latest head of the default branch.
+            base = THE_REPOSITORY.git().merge_base(base, head)
+            fetch_commit(base)
+            fetch_commit(head)
         hunks = diff_for_newfile(base, head, file, context=3)
         done = False
         for hunk in hunks:
@@ -1214,7 +1337,10 @@ def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
     except UnicodeEncodeError:
         context = f" ? UnicodeEncodeError {commit}\n"
 
-    mrdir = branch_mrdir(branch_name(merge_request))
+    if on_commit:
+        mrdir = commit_dir(commit)
+    else:
+        mrdir = branch_mrdir(branch_name(merge_request))
     mrdir.mkdir(exist_ok=True, parents=True)
 
     review = mrdir / "review.gl"
@@ -1229,7 +1355,12 @@ def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
     )
 
 
-def submit_review(merge_request, mrdir):
+def submit_review(what, what_id, thing):
+    on_commit = what == "commits"
+    if on_commit:
+        mrdir = commit_dir(what_id)
+    else:
+        mrdir = branch_mrdir(branch_name(thing))
     state = 0
     discussions = []
     review = mrdir / "review.gl"
@@ -1265,25 +1396,34 @@ def submit_review(merge_request, mrdir):
 
     # if GITHUB and len(discussions) > 0:
     if GITHUB:
-        cancelreview(merge_request)
-        comments = []
-        for commit, file, line_type, old_line, new_line, body in discussions:
-            comments += [{
-                "body": body,
-                # "commit_id": commit,
-                "path": file,
-                "position": old_line,
-            }]
-        data = {
-            "body": " ",
-            "event": "COMMENT",
-            "comments": comments,
-        }
-        if comments:
-            post(
-                f'{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/reviews',
-                data=data,
-            )
+        if on_commit:
+            for commit, file, line_type, old_line, new_line, body in discussions:
+                data = {
+                    "body": body,
+                    "path": file,
+                    "position": old_line,
+                }
+                post(f'{what}/{what_id}/{DISCUSSIONS}', data=data)
+        else:
+            cancelreview(thing)
+            comments = []
+            for commit, file, line_type, old_line, new_line, body in discussions:
+                comments += [{
+                    "body": body,
+                    # "commit_id": commit,
+                    "path": file,
+                    "position": old_line,
+                }]
+            data = {
+                "body": " ",
+                "event": "COMMENT",
+                "comments": comments,
+            }
+            if comments:
+                post(
+                    f'{what}/{what_id}/reviews',
+                    data=data,
+                )
     else:
         for commit, file, line_type, old_line, new_line, body in discussions:
             base_sha = THE_REPOSITORY.rev_parse(f"{commit}~")
@@ -1319,7 +1459,7 @@ def submit_review(merge_request, mrdir):
                     position_type,
                 })
             post(
-                f'{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/{DISCUSSIONS}',
+                f'{what}/{what_id}/{DISCUSSIONS}',
                 data=data,
             )
     if not DRY_RUN:
@@ -1365,6 +1505,14 @@ def cmd_path2url(branches_and_issues):
         if isissue(branch_or_issue):
             print(
                 f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}issues/{branch_or_issue}"
+            )
+            continue
+        if iscommit(branch_or_issue):
+            commit = branch_or_issue
+            assert commit.startswith("c/")
+            commit_sha = commit[len("c/"):]
+            print(
+                f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}commit/{commit_sha}"
             )
             continue
         merge_requests = load_global(MERGE_REQUESTS)
@@ -1653,12 +1801,10 @@ def cmd_cancelpipeline(branch):
     post(f'pipelines/{pipeline["id"]}/cancel')
 
 
-
 def cmd_approve(branch):
     branch = parse_path(branch)[0]
     merge_request = lazy_fetch_merge_request(branch=branch)
     post(f'{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/approve')
-
 
 
 def cancelreview(merge_request):
@@ -1742,9 +1888,10 @@ def main():
         help="compose a review comment for the given MR/commit/file/line",
         description="Compose a review comment for the given MR/commit/file/line.",
     )
-    parser_discuss.add_argument("branch",
+    parser_discuss.add_argument("--branch",
                                 metavar="<branch>",
-                                help="source branch of the MR")
+                                help="source branch of the MR",
+                                )
     parser_discuss.add_argument("commit", metavar="<commit>", help="commit ID")
     parser_discuss.add_argument(
         "old_file",
@@ -1805,7 +1952,6 @@ def main():
     )
     parser_template.add_argument("branch",
                                  metavar="<branch>",
-                                 nargs="?",
                                  help="source branch of the MR")
     parser_template.add_argument(
         "issue_id",
@@ -1876,7 +2022,7 @@ def main():
         description='Merge a merge request',
     )
     parser_cmd_merge.add_argument(metavar="<MR URL or branch>",
-                                         dest="branch")
+                                  dest="branch")
     parser_cmd_merge.set_defaults(func=cmd_merge)
 
     parser_cmd_cancelpipeline = subparser.add_parser(
@@ -1885,7 +2031,7 @@ def main():
         description='Cancel a pipeline for a MR',
     )
     parser_cmd_cancelpipeline.add_argument(metavar="<MR URL or branch>",
-                                         dest="branch")
+                                           dest="branch")
     parser_cmd_cancelpipeline.set_defaults(func=cmd_cancelpipeline)
 
     parser_cmd_aprove = subparser.add_parser(
@@ -1894,7 +2040,7 @@ def main():
         description='Approve a MR',
     )
     parser_cmd_aprove.add_argument(metavar="<MR URL or branch>",
-                                         dest="branch")
+                                   dest="branch")
     parser_cmd_aprove.set_defaults(func=cmd_approve)
 
     args = parser.parse_args()
