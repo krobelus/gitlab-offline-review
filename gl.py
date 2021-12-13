@@ -942,7 +942,7 @@ def parse_metadata_header(rows, thing):
             continue
         break
     description = "\n".join(description)
-    if thing is None or description != dos2unix(thing[ISSUE_DESCRIPTION]):
+    if thing is None or thing[ISSUE_DESCRIPTION] is None or description != dos2unix(thing[ISSUE_DESCRIPTION]):
         data[ISSUE_DESCRIPTION] = description
     if j != 2:  # 2 means commit
         assert j == 0 or rows[j - 1].startswith(MARKER)
