@@ -1471,12 +1471,18 @@ def cmd_url2path(url):
     branch_or_issue = parse_path(url)[0]
     if isissue(branch_or_issue):  # Issue.
         path = f"gl/i/{branch_or_issue}/comments.gl"
+    elif iscommit(branch_or_issue):
+        path = f"gl/{branch_or_issue}/comments.gl"
     else:  # MR.
         path = f"gl/{branch_or_issue}/todo.gl"
     print(path)
 
 
 def url_to_path(arg, merge_requests=None):
+    match = re.match(r".*?/commits?/([0-9a-f]+).*", arg)
+    if match:
+        commit_sha = match.group(1)
+        return f"c/{commit_sha}", None
     match = re.match(
         r".*?\b(" + MERGE_REQUESTS
         + r"?|issues?)/(\d+).*?(?:#note_(\d+))?$", arg)
