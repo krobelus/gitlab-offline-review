@@ -230,6 +230,10 @@ def iscommit(path):
     return path.startswith("c/")
 
 
+def isjob(path):
+    return path.startswith("j/")
+
+
 def mrdir_branch(mrdir):
     """
     input:  /path/to/repo/gl/my-branch
@@ -1473,6 +1477,8 @@ def cmd_url2path(url):
         path = f"gl/i/{branch_or_issue}/comments.gl"
     elif iscommit(branch_or_issue):
         path = f"gl/{branch_or_issue}/comments.gl"
+    elif isjob(branch_or_issue):
+        path = f"gl/{branch_or_issue}"
     else:  # MR.
         path = f"gl/{branch_or_issue}/todo.gl"
     print(path)
@@ -1483,6 +1489,10 @@ def url_to_path(arg, merge_requests=None):
     if match:
         commit_sha = match.group(1)
         return f"c/{commit_sha}", None
+    match = re.match(r".*?/jobs/([0-9]+).*", arg)
+    if match:
+        job_id = match.group(1)
+        return f"j/{job_id}", None
     match = re.match(
         r".*?\b(" + MERGE_REQUESTS
         + r"?|issues?)/(\d+).*?(?:#note_(\d+))?$", arg)
