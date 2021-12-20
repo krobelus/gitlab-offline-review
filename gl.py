@@ -1968,6 +1968,7 @@ def main():
     )
     parser_template.add_argument("branch",
                                  metavar="<branch>",
+                                 nargs="?",
                                  help="source branch of the MR")
     parser_template.add_argument(
         "issue_id",
