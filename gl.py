@@ -1527,6 +1527,14 @@ def cmd_path2url(branches_and_issues):
                 f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}issues/{branch_or_issue}"
             )
             continue
+        if isjob(branch_or_issue):
+            job = branch_or_issue
+            assert job.startswith("j/")
+            job_id = job[len("j/"):]
+            print(
+                f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}jobs/{job_id}"
+            )
+            continue
         if iscommit(branch_or_issue):
             commit = branch_or_issue
             assert commit.startswith("c/")
