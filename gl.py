@@ -49,6 +49,7 @@ if "GIT_WORKTREE" in os.environ:
     WORKING_TREE = os.environ["GIT_WORKTREE"]
 DIR = Path(WORKING_TREE) / GLDIR
 DIR.mkdir(exist_ok=True)
+TARGET_BRANCH = os.environ.get("GITLAB_TARGET_BRANCH", "master")
 
 # Try to guess the remote that, so we know which GitLab instance to talk to.
 
@@ -651,16 +652,18 @@ def cmd_template(branch=None, issue_id=None):
         "milestone": None,
         "labels": (),
     }
-    target_branch = os.environ.get("GITLAB_TARGET_BRANCH", "master")
     if branch is not None:
         data[ISSUE_DESCRIPTION] = ""
         if branch is None:
             branch = MERGE_REQUEST_SOURCE_BRANCH
         else:
             shortlog = THE_REPOSITORY.git().log(
-                "--format=%h %s", f"{REMOTE_NAME}/{target_branch}..{branch}")
+                "--format=%h %s", f"{REMOTE_NAME}/{TARGET_BRANCH}..{branch}")
             if shortlog.count("\n") == 0:
                 data["title"] = shortlog.split(" ", maxsplit=1)[1].strip()
+                body = THE_REPOSITORY.git().log(
+                    "--format=%b", f"{REMOTE_NAME}/{branch}", "-1")
+                data[ISSUE_DESCRIPTION] += body.rstrip() + "\n"
             else:
                 data[ISSUE_DESCRIPTION] += shortlog
                 data[ISSUE_DESCRIPTION] += "\n"
@@ -669,7 +672,7 @@ def cmd_template(branch=None, issue_id=None):
             data["reviewers"] = ()
         data[
             MERGE_REQUEST_SOURCE_BRANCH] = f"{GITLAB_USER}:{branch}" if GITHUB else branch
-        data[MERGE_REQUEST_TARGET_BRANCH] = target_branch
+        data[MERGE_REQUEST_TARGET_BRANCH] = TARGET_BRANCH
         data["remove_source_branch"] = True
         issue_template_callback(data, branch, issue_id)
     print(metadata_header(data).rstrip("\n"))
