@@ -210,7 +210,7 @@ def diff_context(base, head, old_line, new_path, new_line):
     except UnicodeEncodeError:
         return f" ? UnicodeEncodeError parsing 'git diff {base} {head}'\n"
     except StopIteration:
-        return " ? no file '{new_path}' in {base}..{head}\n"
+        return f" ? no file '{new_path}' in {base}..{head}\n"
     if new_line is not None:
         line = new_line
         rows = hunk.target
