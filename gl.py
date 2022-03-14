@@ -662,7 +662,7 @@ def cmd_template(branch=None, issue_id=None):
             if shortlog.count("\n") == 0:
                 data["title"] = shortlog.split(" ", maxsplit=1)[1].strip()
                 body = THE_REPOSITORY.git().log(
-                    "--format=%b", f"{REMOTE_NAME}/{branch}", "-1")
+                    "--format=%b", branch, "-1")
                 data[ISSUE_DESCRIPTION] += body.rstrip() + "\n"
             else:
                 data[ISSUE_DESCRIPTION] += shortlog
