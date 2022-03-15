@@ -228,11 +228,11 @@ def isissue(branch_or_issue):
 
 
 def iscommit(path):
-    return path.startswith("c/")
+    return not isissue(path) and path.startswith("c/")
 
 
 def isjob(path):
-    return path.startswith("j/")
+    return not isissue(path) and path.startswith("j/")
 
 
 def mrdir_branch(mrdir):
