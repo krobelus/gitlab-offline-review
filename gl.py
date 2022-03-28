@@ -1001,7 +1001,7 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None, commit_
         data = None
     else:
         i, data = parse_metadata_header(rows, None if on_commit else thing)
-    if data and False:  # TODO
+    if data:  # TODO
         if not DRY_RUN:  # TODO
             current = gitlab_request("get", f"{what}/{what_id}").json()
             for key in data:
@@ -1012,12 +1012,12 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None, commit_
                     assert (
                         0
                     ), f"outdated {key} - have {thing[key]} but upstream has {current[key]}"
-            put(
-                f"{what}/{what_id}",
-                data=data,
-            )
-            changed = True
-            desc_changed = True
+        put(
+            f"{what}/{what_id}",
+            data=data,
+        )
+        changed = True
+        desc_changed = True
     for row in rows[i:]:
         if merge_request is not None:
             if re.match(r"^!merge$", row):
