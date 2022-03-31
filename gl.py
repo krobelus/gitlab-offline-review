@@ -1276,8 +1276,11 @@ def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
     if on_commit:
         pass
     else:
-        if GITHUB and not THE_REPOSITORY.git().branch("--list", "--remotes", f"{REMOTE_NAME}/{branch}"):
-            pr_branch = THE_REPOSITORY.git().for_each_ref(f'--points-at={branch}', f'refs/remotes/{REMOTE_NAME}/pr-*')
+        in_remote = THE_REPOSITORY.git().branch("--list", "--remotes", f"{REMOTE_NAME}/{branch}")
+        if in_remote:
+            in_remote = in_remote.strip()
+        if GITHUB:
+            pr_branch = THE_REPOSITORY.git().for_each_ref(f'--points-at={in_remote if in_remote else branch}', f'refs/remotes/{REMOTE_NAME}/pr-*')
             if pr_branch:
                 branch = os.path.basename(pr_branch)
         merge_request = lazy_fetch_merge_request(branch=branch)
