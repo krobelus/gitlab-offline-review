@@ -599,6 +599,21 @@ def fetch(branches_and_issues):
         #  Fetch all open issues (this takes some time).
         issues = fetch_global("issues")
         fetched_all_issues = True
+    tmp = []
+    for j in branches_and_issues:
+        if not isjob(j):
+            tmp += [j]
+            continue
+        jid = j[len("j/"):]
+        jobsdir = (DIR / "j")
+        filename = jobsdir / jid
+        if filename.exists():
+            continue
+        log = get(f"jobs/{jid}/trace", raw=True, per_page=None)
+        jurl = path2url(j)
+        filename.write_text("\n".join((jurl, "", log.text)))
+    branches_and_issues = tmp
+
     want_branches = set(branch for branch in branches_and_issues
                         if not isissue(branch) and not iscommit(branch))
     if merge_requests is None or not want_branches.issubset(have_branches):
@@ -1521,39 +1536,30 @@ def url_to_path(arg, merge_requests=None):
     return branch_name(merge_request), note_id
 
 
-def cmd_path2url(branches_and_issues):
-    branches_and_issues = [parse_path(p)[0] for p in branches_and_issues]
-    for branch_or_issue in branches_and_issues:
-        dash = "/" if GITHUB else "/-/"
-        if isissue(branch_or_issue):
-            print(
-                f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}issues/{branch_or_issue}"
-            )
-            continue
-        if isjob(branch_or_issue):
-            job = branch_or_issue
-            assert job.startswith("j/")
-            job_id = job[len("j/"):]
-            print(
-                f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}jobs/{job_id}"
-            )
-            continue
-        if iscommit(branch_or_issue):
-            commit = branch_or_issue
-            assert commit.startswith("c/")
-            commit_sha = commit[len("c/"):]
-            print(
-                f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}commit/{commit_sha}"
-            )
-            continue
-        merge_requests = load_global(MERGE_REQUESTS)
-        merge_request = next(mr for mr in merge_requests
-                             if branch_name(mr) == branch_or_issue)
-        mr = "pull" if GITHUB else MERGE_REQUESTS
-        print(
-            f'{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}{mr}/{merge_request[ISSUE_ID]}'
-        )
+def path2url(path):
+    path = parse_path(path)[0]
+    dash = "/" if GITHUB else "/-/"
+    if isissue(path):
+        return f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}issues/{path}"
+    if isjob(path):
+        job = path
+        assert job.startswith("j/")
+        job_id = job[len("j/"):]
+        return f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}jobs/{job_id}"
+    if iscommit(path):
+        commit = path
+        assert commit.startswith("c/")
+        commit_sha = commit[len("c/"):]
+        return f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}commit/{commit_sha}"
+    merge_requests = load_global(MERGE_REQUESTS)
+    merge_request = next(mr for mr in merge_requests
+                         if branch_name(mr) == path)
+    mr = "pull" if GITHUB else MERGE_REQUESTS
+    return f'{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}{mr}/{merge_request[ISSUE_ID]}'
 
+def cmd_path2url(branches_and_issues):
+    for branch_or_issue in branches_and_issues:
+        print(path2url(branch_or_issue))
 
 def test_parse_path():
     # Branch
