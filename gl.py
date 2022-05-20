@@ -1042,13 +1042,12 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None, commit_
                 changed = True
                 continue
         if re.match(r"^!close$", row):
-            assert not GITHUB
-            # patch(f"{what}/{what_id}", data={
-            #     "state": "closed",
-            # })
-            put(f"{what}/{what_id}", data={
-                "state_event": "close",
-            })
+            if GITHUB:
+                subprocess.run(("gh", "issue", "close", str(what_id)), check=True)
+            else:
+                put(f"{what}/{what_id}", data={
+                    "state_event": "close",
+                })
             changed = True
             continue
         if state == "NEW_DISCUSSION":
