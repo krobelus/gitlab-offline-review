@@ -229,7 +229,7 @@ be simplified.
 6. the line number in the old version of the file
 7. the line number in the new version of the file
 
-A command like `gl.py discuss <branch> <commit> <file> + <old_line> <new_line>`
+A command like `gl.py discuss --branch=<branch> --commit=<commit> <file> + <old_line> <new_line>`
 will add an entry like this to a MR's `review.gl`:
 
 ```diff
@@ -281,7 +281,7 @@ through a commit diff, you can add review comments with a binding like this
 one (by typing `ac`):
 
 ```
-bind generic ac !gl.py discuss %(branch) %(commit) %(file) %(text) %(lineno_old) %(lineno)
+bind generic ac !gl.py discuss --branch=%(branch) --commit=%(commit) -- %(file) %(text) %(lineno_old) %(lineno)
 ```
 
 Nowadays I tend to use a setup with two split windows: Tig plus an editor
@@ -290,7 +290,7 @@ with an editor.  Instead, it copies the path of the file, which you can then
 open in the editor.
 
 ```
-bind generic as @sh -c 'EDITOR=true gl discuss %(branch) %(commit) "$1" "$2" %(lineno_old) %(lineno); echo -n "gl/%(branch)/review.gl" | xclip' -- %(file) %(text)
+bind generic as @sh -c 'EDITOR=true gl discuss --branch=%(branch) --commit=%(commit) -- "$1" "$2" %(lineno_old) %(lineno); echo -n "gl/%(branch)/review.gl" | xclip' -- %(file) %(text)
 ```
 
 ### [Kakoune](https://kakoune.org)

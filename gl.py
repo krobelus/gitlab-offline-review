@@ -1284,6 +1284,7 @@ def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
                 branch = os.path.basename(pr_branch)
         merge_request = lazy_fetch_merge_request(branch=branch)
 
+    line_type_arg = line_type
     line_type = line_type[:1]
     assert line_type in " -+"
     old_line = int(old_line)
@@ -1322,48 +1323,54 @@ def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
             if done:
                 break
             github_line += 1
-        # GitHub wants the delta that was added by commits in the range commit..head before this line.
+        if commit is None:
+            old_line = github_line
+        else:
+            # GitHub wants the delta that was added by commits in the range commit..head before this line.
+            try:
+                hunks = diff_for_newfile(commit, head, file, context=3)
+            except StopIteration:
+                hunks = []
+            done = False
+            delta = 0
+            for hunk in hunks:
+                for line in hunk:
+                    # TODO
+                    if line.is_added:
+                        delta += 1
+                    elif line.is_removed:
+                        delta -= 1
+                    elif line.target_line_no is not None and line.target_line_no >= github_line:
+                        done = True
+                        break
+                if line.target_line_no is not None and line.target_line_no >= github_line:
+                    break
+                if done:
+                    break
+            old_line = github_line + delta
+    if commit is None:
+        context = line_type_arg
+    else:
         try:
-            hunks = diff_for_newfile(commit, head, file, context=3)
-        except StopIteration:
-            hunks = []
-        done = False
-        delta = 0
-        for hunk in hunks:
-            for line in hunk:
-                # TODO
-                if line.is_added:
-                    delta += 1
-                elif line.is_removed:
-                    delta -= 1
-                elif line.target_line_no is not None and line.target_line_no >= github_line:
-                    done = True
-                    break
-            if line.target_line_no is not None and line.target_line_no >= github_line:
-                break
-            if done:
-                break
-        old_line = github_line + delta
-    try:
-        hunk = diff_for_newfile(f"{commit}~", commit, file)[0]
-        rows = []
-        for i, row in enumerate(hunk):
-            if new_file == "/dev/null":
-                if row.source_line_no is None:
-                    continue
-                if row.source_line_no >= old_line:
-                    rows = hunk[:i + 1]
-                    break
-            else:
-                if row.target_line_no is None:
-                    continue
-                if row.target_line_no >= new_line:
-                    rows = hunk[:i + 1]
-                    break
-        context = "".join(r.line_type + r.value
-                          for r in rows[-DIFF_CONTEXT_LINES:])
-    except UnicodeEncodeError:
-        context = f" ? UnicodeEncodeError {commit}\n"
+            hunk = diff_for_newfile(f"{commit}~", commit, file)[0]
+            rows = []
+            for i, row in enumerate(hunk):
+                if new_file == "/dev/null":
+                    if row.source_line_no is None:
+                        continue
+                    if row.source_line_no >= old_line:
+                        rows = hunk[:i + 1]
+                        break
+                else:
+                    if row.target_line_no is None:
+                        continue
+                    if row.target_line_no >= new_line:
+                        rows = hunk[:i + 1]
+                        break
+            context = "".join(r.line_type + r.value
+                              for r in rows[-DIFF_CONTEXT_LINES:])
+        except UnicodeEncodeError:
+            context = f" ? UnicodeEncodeError {commit}\n"
 
     if on_commit:
         mrdir = commit_dir(commit)
@@ -1372,8 +1379,9 @@ def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
     mrdir.mkdir(exist_ok=True, parents=True)
 
     review = mrdir / "review.gl"
+    commitsha = ("0" * 40) if commit is None else commit
     with open(review, "a") as f:
-        header = f"\n{MARKER} {commit} {file}:{new_line} {line_type} {old_line}\n"
+        header = f"\n{MARKER} {commitsha} {file}:{new_line} {line_type} {old_line}\n"
         f.write(header)
         f.write(context + "\n")
     subprocess.run(
@@ -1931,7 +1939,7 @@ def main():
                                 metavar="<branch>",
                                 help="source branch of the MR",
                                 )
-    parser_discuss.add_argument("commit", metavar="<commit>", help="commit ID")
+    parser_discuss.add_argument("--commit", metavar="<commit>", help="commit ID")
     parser_discuss.add_argument(
         "old_file",
         metavar="<old_file>",
