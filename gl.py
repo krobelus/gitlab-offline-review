@@ -1272,6 +1272,7 @@ def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
                 new_line):
     "Draft a review comment."
     on_commit = branch is None
+    branch = os.environ.get("BRANCH", branch)
     if on_commit:
         pass
     else:
