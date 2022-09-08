@@ -83,6 +83,7 @@ if REMOTE is None:
     raise UserError("Missing remote, don't know how to talk to GitLab")
 GITLAB = REMOTE["Host"]
 GITHUB = GITLAB == "github.com"
+CROSS_REPO = GITHUB and any(f":{GITLAB_USER}/" in next(remote.urls) for remote in THE_REPOSITORY.remotes) # crude heuristic
 GITLAB_PROJECT = REMOTE["Project"]
 PROTOCOL = "http" if GITLAB == "localhost" else "https"
 
@@ -686,7 +687,7 @@ def cmd_template(branch=None, issue_id=None):
             data["assignees"] = (lookup_user(username=GITLAB_USER), )
             data["reviewers"] = ()
         data[
-            MERGE_REQUEST_SOURCE_BRANCH] = f"{GITLAB_USER}:{branch}" if GITHUB else branch
+            MERGE_REQUEST_SOURCE_BRANCH] = f"{GITLAB_USER}:{branch}" if CROSS_REPO else branch
         data[MERGE_REQUEST_TARGET_BRANCH] = TARGET_BRANCH
         data["remove_source_branch"] = True
         issue_template_callback(data, branch, issue_id)
