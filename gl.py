@@ -396,6 +396,16 @@ def load_discussions(mrdir):
         return []
 
 
+def load_reviews(mrdir):
+    assert GITHUB
+    try:
+        with open(mrdir / "reviews.json") as f:
+            return json.load(f)
+    except FileNotFoundError:  # We never fetched.
+        return []
+
+
+
 def fetch_global(what):
     if GITHUB:
         doc = get(f"{what}?state=open")
@@ -799,6 +809,9 @@ def fetch_mr_data(merge_request):
     (mrdir / "resolved.gl").write_text(show_discussion(resolved))
     (mrdir / "meta.gl").write_text(
         metadata_header(merge_request) + show_discussion(unresolvable))
+    if GITHUB:
+        reviews = get(f"{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/reviews")
+        (mrdir / "reviews.json").write_text(json.dumps(reviews, indent=1))
 
 
 def fetch_commit_data(commit):
