@@ -269,6 +269,10 @@ def branch_name(merge_request, fqn=False):
     else:
         return branch
 
+def find_merge_request(merge_requests, branch):
+    return next(mr for mr in merge_requests
+                if branch_name(mr) == branch
+                or (GITHUB and mr["head"]["ref"] == branch))
 
 def target_branch_name(merge_request):
     """
@@ -491,6 +495,17 @@ def lazy_fetch_merge_request(*, branch=None, iid=None, attempts=2):
 def discussion_notes(discussion):
     return [discussion] if GITHUB else discussion["notes"]
 
+
+def show_reviews(reviews):
+    rendered = ""
+    for review in reviews:
+        author = review["user"]["login"]
+        state = review["state"].lower()
+        body = review["body"]
+        lines = f'[{author} {state}] {body}'.splitlines()
+        rendered += "\t" + lines[0] + \
+            "".join("\n\t\t" + line for line in lines[1:]) + "\n\n"
+    return rendered
 
 def show_discussion(discussions, on_commit=False):
     if GITHUB:
@@ -792,6 +807,9 @@ def fetch_mr_data(merge_request):
         resolved = (
             d for d in discussions
             if "resolved" in d["notes"][0] and d["notes"][0]["resolved"])
+    if GITHUB:
+        reviews = get(f"{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/reviews")
+        rendered_reviews = show_reviews(reviews)
     todo = show_discussion(todo) + f"{MARKER}\n"
     pristine_path = mrdir / "pristine-todo.gl"
     todo_path = mrdir / "todo.gl"
@@ -807,11 +825,17 @@ def fetch_mr_data(merge_request):
         todo_path.write_text(todo)
         pristine_path.write_text(todo)
     (mrdir / "resolved.gl").write_text(show_discussion(resolved))
-    (mrdir / "meta.gl").write_text(
-        metadata_header(merge_request) + show_discussion(unresolvable))
     if GITHUB:
-        reviews = get(f"{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/reviews")
         (mrdir / "reviews.json").write_text(json.dumps(reviews, indent=1))
+        discussions = sorted(
+            [(strptime(x["submitted_at"]), [x], show_reviews) for x in reviews]
+            + [(strptime(x["created_at"]), [x], show_discussion) for x in unresolvable])
+        (mrdir / "meta.gl").write_text(
+            metadata_header(merge_request)
+            + "".join(t[2](t[1]) for t in discussions))
+    else:
+        (mrdir / "meta.gl").write_text(
+            metadata_header(merge_request) + show_discussion(unresolvable))
 
 
 def fetch_commit_data(commit):
@@ -876,8 +900,7 @@ def cmd_submit(branches_and_issues):
 
         mrdir = branch_mrdir(branch_or_issue)
         try:
-            merge_request = next(mr for mr in merge_requests
-                                 if branch_name(mr) == branch_or_issue)
+            merge_requests = find_merge_request(merge_requests, branch_or_issue)
         except StopIteration:
             assert mrdir.is_dir()
             print(f"MR not open, removing {mrdir}", file=sys.stderr)
@@ -1527,6 +1550,9 @@ def cmd_url2path(url):
     elif isjob(branch_or_issue):
         path = f"gl/{branch_or_issue}"
     else:  # MR.
+        if GITHUB:
+            _, merge_requests = load_issues_and_merge_requests()
+            branch_or_issue = branch_name(find_merge_request(merge_requests, branch_or_issue))
         path = f"gl/{branch_or_issue}/todo.gl"
     print(path)
 
@@ -1577,8 +1603,7 @@ def path2url(path):
         commit_sha = commit[len("c/"):]
         return f"{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}commit/{commit_sha}"
     merge_requests = load_global(MERGE_REQUESTS)
-    merge_request = next(mr for mr in merge_requests
-                         if branch_name(mr) == path)
+    merge_request = find_merge_request(merge_requests, path)
     mr = "pull" if GITHUB else MERGE_REQUESTS
     return f'{PROTOCOL}://{GITLAB}/{GITLAB_PROJECT}{dash}{mr}/{merge_request[ISSUE_ID]}'
 
@@ -1632,9 +1657,13 @@ def parse_path(path, merge_requests=None):
     return str(p), note_id
 
 
+def strptime(text: str):
+    return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
+
+
 def atom_updated(ns, element):
     updated_elem = element.find(ns + "updated")
-    return datetime.strptime(updated_elem.text, "%Y-%m-%dT%H:%M:%SZ")
+    return strptime(updated_elem.text)
 
 
 def cmd_activity():
