@@ -809,7 +809,6 @@ def fetch_mr_data(merge_request):
             if "resolved" in d["notes"][0] and d["notes"][0]["resolved"])
     if GITHUB:
         reviews = get(f"{MERGE_REQUESTS}/{merge_request[ISSUE_ID]}/reviews")
-        rendered_reviews = show_reviews(reviews)
     todo = show_discussion(todo) + f"{MARKER}\n"
     pristine_path = mrdir / "pristine-todo.gl"
     todo_path = mrdir / "todo.gl"
@@ -832,7 +831,7 @@ def fetch_mr_data(merge_request):
             + [(strptime(x["created_at"]), [x], show_discussion) for x in unresolvable])
         (mrdir / "meta.gl").write_text(
             metadata_header(merge_request)
-            + "".join(t[2](t[1]) for t in discussions))
+            + "".join(t[2](t[1]) for t in discussions) + "\n")
     else:
         (mrdir / "meta.gl").write_text(
             metadata_header(merge_request) + show_discussion(unresolvable))
@@ -900,7 +899,7 @@ def cmd_submit(branches_and_issues):
 
         mrdir = branch_mrdir(branch_or_issue)
         try:
-            merge_requests = find_merge_request(merge_requests, branch_or_issue)
+            merge_request = find_merge_request(merge_requests, branch_or_issue)
         except StopIteration:
             assert mrdir.is_dir()
             print(f"MR not open, removing {mrdir}", file=sys.stderr)
