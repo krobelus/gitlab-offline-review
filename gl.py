@@ -502,6 +502,8 @@ def show_reviews(reviews):
         author = review["user"]["login"]
         state = review["state"].lower()
         body = review["body"]
+        if state == "commented" and not body:
+            continue
         lines = f'[{author} {state}] {body}'.splitlines()
         rendered += "\t" + lines[0] + \
             "".join("\n\t\t" + line for line in lines[1:]) + "\n\n"
