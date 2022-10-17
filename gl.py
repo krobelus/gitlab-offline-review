@@ -647,7 +647,7 @@ def fetch(branches_and_issues):
     if merge_requests is None or not want_branches.issubset(have_branches):
         merge_requests = fetch_global(MERGE_REQUESTS)
     for merge_request in merge_requests:
-        if branch_name(merge_request) not in want_branches:
+        if want_branches and branch_name(merge_request) not in want_branches:
             continue
         merge_request = update_global(MERGE_REQUESTS, merge_request)
         fetch_mr_data(merge_request)
