@@ -619,7 +619,9 @@ def fetch(branches_and_issues):
     fetched_all_issues = False
     # If we already fetched the list of issues before, and are given an
     # explicit list of issues, then only fetch those.
+    have_issue_argument = False
     if (DIR / "issues.json").exists() and branches_and_issues:
+        have_issue_argument = any(isissue(i) for i in branches_and_issues)
         issues = [{
             ISSUE_ID: i
         } for i in branches_and_issues if isissue(i)]
@@ -647,7 +649,7 @@ def fetch(branches_and_issues):
     if merge_requests is None or not want_branches.issubset(have_branches):
         merge_requests = fetch_global(MERGE_REQUESTS)
     for merge_request in merge_requests:
-        if want_branches and branch_name(merge_request) not in want_branches:
+        if (want_branches or have_issue_argument) and branch_name(merge_request) not in want_branches:
             continue
         merge_request = update_global(MERGE_REQUESTS, merge_request)
         fetch_mr_data(merge_request)
