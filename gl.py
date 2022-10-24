@@ -981,13 +981,13 @@ def parse_metadata_header(rows, thing):
             continue
         prefix = f"{MARKER} remove_source_branch:"
         if row.startswith(prefix):
-            arg = bool(row[len(prefix):].lstrip())
+            arg = row[len(prefix):].lstrip().lower() != "false"
             if thing is None or arg != thing.get("remove_source_branch"):
                 data["remove_source_branch"] = arg
             continue
         prefix = f"{MARKER} draft:"
         if row.startswith(prefix):
-            arg = bool(row[len(prefix):].lstrip())
+            arg = row[len(prefix):].lstrip().lower() != "false"
             if thing is None or arg != thing.get("draft"):
                 data["draft"] = arg
             continue
