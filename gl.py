@@ -750,7 +750,7 @@ def metadata_header(thing):
                dos2unix(f'{thing[ISSUE_DESCRIPTION]}\n')) + extra
             + assignees + f"{MARKER} milestone: "
             + (thing["milestone"]["title"] if thing["milestone"] else "")
-            + "\n" + labels + "\n")
+            + "\n" + f"{MARKER} draft: False\n" + labels + "\n")
 
 
 def fetch_issue_data(issue):
@@ -985,6 +985,12 @@ def parse_metadata_header(rows, thing):
             if thing is None or arg != thing.get("remove_source_branch"):
                 data["remove_source_branch"] = arg
             continue
+        prefix = f"{MARKER} draft:"
+        if row.startswith(prefix):
+            arg = bool(row[len(prefix):].lstrip())
+            if thing is None or arg != thing.get("draft"):
+                data["draft"] = arg
+            continue
         prefix = f"{MARKER} milestone:"
         if row.startswith(prefix):
             milestone = row[len(prefix):].lstrip()
@@ -1022,6 +1028,8 @@ def parse_metadata_header(rows, thing):
         for key in keys:
             if key in data:
                 del data[key]
+    if not GITHUB:
+        del data["draft"]
     return j, data
 
 
