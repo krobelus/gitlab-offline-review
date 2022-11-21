@@ -1849,6 +1849,16 @@ def fetch_labels():
     return True
 
 
+def fetch_teams():
+    if not GITHUB:
+        return
+    group = os.environ["GITLAB_GROUP"]
+    url = f"{PROTOCOL}://api.github.com/orgs/{group}/teams"
+    teams = get(url)
+    (DIR / "teams.json").write_text(json.dumps(teams, indent=1))
+    return True
+
+
 def cmd_staticwords():
     print("\n".join([x["username"] for x in load_users()]
                     + [x["title"] for x in load_milestones()]
@@ -1856,9 +1866,11 @@ def cmd_staticwords():
 
 
 def cmd_fetchstatic():
-    gather_users()
-    fetch_milestones()
-    fetch_labels()
+    if not GITHUB:
+        gather_users()
+        fetch_milestones()
+        fetch_labels()
+    fetch_teams()
 
 
 def cmd_fetchmilestones():
