@@ -1116,6 +1116,10 @@ def submit_discussion(discussions, rows, merge_request=None, issue=None, commit_
                 did = next(i for i, discussion in enumerate(discussions)
                            if discussion["id"] == note_id)
                 comments[did] = {}
+        if GITHUB:
+            event_header = re.match(r"^\t\[\S+ (commented|approved|changes-requested)\] ", row)
+            if event_header:
+                continue
         location = re.match(r"^(?:[^:]+:\d+: )?" + MARKER + " ([0-9a-f]+)$", row)
         if location:
             discussion_id = location.group(1)
