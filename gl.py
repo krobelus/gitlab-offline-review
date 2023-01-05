@@ -1362,45 +1362,49 @@ def cmd_discuss(branch, commit, old_file, new_file, line_type, old_line,
             fetch_commit(head)
         hunks = diff_for_newfile(base, head, file, context=3)
         done = False
-        for hunk in hunks:
-            for line in hunk:
-                github_line += 1
-                if line_type == "-":
-                    if line.source_line_no == old_line:
-                        done = True
-                        break
-                else:
-                    if line.target_line_no == new_line:
-                        done = True
-                        break
-            if done:
-                break
-            github_line += 1
-        if commit is None:
-            old_line = github_line
-        else:
-            # GitHub wants the delta that was added by commits in the range commit..head before this line.
-            try:
-                hunks = diff_for_newfile(commit, head, file, context=3)
-            except StopIteration:
-                hunks = []
-            done = False
-            delta = 0
+
+        if True: # {
             for hunk in hunks:
                 for line in hunk:
-                    # TODO
-                    if line.is_added:
-                        delta += 1
-                    elif line.is_removed:
-                        delta -= 1
-                    elif line.target_line_no is not None and line.target_line_no >= github_line:
-                        done = True
-                        break
-                if line.target_line_no is not None and line.target_line_no >= github_line:
-                    break
+                    github_line += 1
+                    if line_type == "-":
+                        if line.source_line_no == old_line:
+                            done = True
+                            break
+                    else:
+                        if line.target_line_no == new_line:
+                            done = True
+                            break
                 if done:
                     break
-            old_line = github_line + delta
+                github_line += 1
+            if commit is None:
+                pass
+            else:
+                # GitHub wants the delta that was added by commits in the range commit..head before this line.
+                try:
+                    hunks = diff_for_newfile(commit, head, file, context=3)
+                except StopIteration:
+                    hunks = []
+                done = False
+                delta = 0
+                for hunk in hunks:
+                    for line in hunk:
+                        # TODO
+                        if line.is_added:
+                            delta += 1
+                        elif line.is_removed:
+                            delta -= 1
+                        elif line.target_line_no is not None and line.target_line_no >= github_line:
+                            done = True
+                            break
+                    if line.target_line_no is not None and line.target_line_no >= github_line:
+                        break
+                    if done:
+                        break
+                old_line += delta
+                new_line += delta
+    # }
     if commit is None:
         context = line_type_arg
     else:
@@ -1490,7 +1494,8 @@ def submit_review(what, what_id, thing):
                 data = {
                     "body": body,
                     "path": file,
-                    "position": old_line,
+                    "line": old_line if line_type == '-' else new_line,
+                    "side": "LEFT" if line_type == '-' else "RIGHT",
                 }
                 post(f'{what}/{what_id}/{DISCUSSIONS}', data=data)
         else:
@@ -1501,7 +1506,8 @@ def submit_review(what, what_id, thing):
                     "body": body,
                     # "commit_id": commit,
                     "path": file,
-                    "position": old_line,
+                    "line": old_line if line_type == '-' else new_line,
+                    "side": "LEFT" if line_type == '-' else "RIGHT",
                 }]
             data = {
                 "body": " ",
